@@ -2,32 +2,21 @@ extends Node3D
 
 ## EnemySpawner - Spawns enemies at random positions around the arena
 
-var enemy_scene: PackedScene = null
 var spawn_timer: float = 0.0
-var spawn_interval: float = 4.0   # seconds between spawns
+var spawn_interval: float = 4.0
 var max_enemies: int = 8
 var spawn_radius: float = 12.0
-var spawn_height: float = 0.5
-var total_spawned: int = 0
+var spawn_height: float = 0.9   # start above floor
 var active: bool = false
 var current_enemies: Array = []
+var kill_count: int = 0
 
 signal enemy_spawned(enemy: Node)
 signal enemy_killed(enemy: Node, total_kills: int)
 
-var kill_count: int = 0
-
-func _ready() -> void:
-	_build_enemy_scene()
-
-func _build_enemy_scene() -> void:
-	# Build enemy scene procedurally
-	enemy_scene = PackedScene.new()
-	# We'll instantiate via script directly instead
-	pass
-
 func activate() -> void:
 	active = true
+	spawn_timer = 0.5  # first spawn quickly
 
 func deactivate() -> void:
 	active = false
@@ -35,10 +24,7 @@ func deactivate() -> void:
 func _process(delta: float) -> void:
 	if not active:
 		return
-
-	# Clean up dead enemies
 	current_enemies = current_enemies.filter(func(e): return is_instance_valid(e) and not e.is_dead)
-
 	spawn_timer -= delta
 	if spawn_timer <= 0.0 and current_enemies.size() < max_enemies:
 		spawn_timer = spawn_interval
@@ -46,48 +32,137 @@ func _process(delta: float) -> void:
 
 func _spawn_enemy() -> void:
 	var enemy := _create_enemy()
-	if enemy == null:
-		return
-
-	# Random position on a ring around origin
 	var angle := randf() * TAU
 	var dist := spawn_radius * (0.6 + randf() * 0.4)
-	var pos := Vector3(cos(angle) * dist, spawn_height, sin(angle) * dist)
-	enemy.global_position = pos
+	enemy.global_position = Vector3(cos(angle) * dist, spawn_height, sin(angle) * dist)
 	get_tree().current_scene.add_child(enemy)
-
 	enemy.died.connect(_on_enemy_died)
 	current_enemies.append(enemy)
 	total_spawned += 1
 	enemy_spawned.emit(enemy)
 
+var total_spawned: int = 0
+
 func _create_enemy() -> CharacterBody3D:
-	var enemy := CharacterBody3D.new()
-	enemy.set_script(load("res://scripts/enemy.gd"))
+	var root := CharacterBody3D.new()
+	root.set_script(load("res://scripts/enemy.gd"))
+	root.add_to_group("enemies")
+	# collision layers: layer 4, mask 1 (floor) + 2 (player)
+	root.collision_layer = 4
+	root.collision_mask = 3
 
-	# Mesh
-	var mesh_inst := MeshInstance3D.new()
-	var capsule := CapsuleMesh.new()
-	capsule.radius = 0.35
-	capsule.height = 1.8
-	mesh_inst.mesh = capsule
-	mesh_inst.name = "MeshInstance3D"
-
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.8, 0.1, 0.1)
-	mesh_inst.set_surface_override_material(0, mat)
-	enemy.add_child(mesh_inst)
-
-	# Collision
+	# --- Collision capsule ---
 	var col := CollisionShape3D.new()
-	var shape := CapsuleShape3D.new()
-	shape.radius = 0.35
-	shape.height = 1.8
-	col.shape = shape
 	col.name = "CollisionShape3D"
-	enemy.add_child(col)
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.32
+	cap.height = 1.6
+	col.shape = cap
+	root.add_child(col)
 
-	return enemy
+	# Pick a random enemy color variant
+	var variants := [
+		Color(0.7, 0.1, 0.1),   # red soldier
+		Color(0.1, 0.1, 0.7),   # blue grunt
+		Color(0.15, 0.5, 0.15), # green heavy
+	]
+	var c: Color = variants[randi() % variants.size()]
+
+	# --- Torso ---
+	var torso := MeshInstance3D.new()
+	torso.name = "MeshInstance3D"
+	var torso_mesh := BoxMesh.new()
+	torso_mesh.size = Vector3(0.55, 0.65, 0.28)
+	torso.mesh = torso_mesh
+	var mat_torso := StandardMaterial3D.new()
+	mat_torso.albedo_color = c
+	mat_torso.roughness = 0.85
+	torso.set_surface_override_material(0, mat_torso)
+	torso.position = Vector3(0, 0.55, 0)
+	root.add_child(torso)
+
+	# --- Head ---
+	var head := MeshInstance3D.new()
+	var head_mesh := SphereMesh.new()
+	head_mesh.radius = 0.2
+	head_mesh.height = 0.4
+	head.mesh = head_mesh
+	var mat_head := StandardMaterial3D.new()
+	mat_head.albedo_color = Color(0.75, 0.55, 0.4)
+	mat_head.roughness = 0.9
+	head.set_surface_override_material(0, mat_head)
+	head.position = Vector3(0, 1.08, 0)
+	root.add_child(head)
+
+	# --- Helmet ---
+	var helmet := MeshInstance3D.new()
+	var helm_mesh := SphereMesh.new()
+	helm_mesh.radius = 0.215
+	helm_mesh.height = 0.3
+	helmet.mesh = helm_mesh
+	var mat_helm := StandardMaterial3D.new()
+	mat_helm.albedo_color = c.darkened(0.35)
+	mat_helm.roughness = 0.5
+	mat_helm.metallic = 0.3
+	helmet.set_surface_override_material(0, mat_helm)
+	helmet.position = Vector3(0, 1.17, 0)
+	root.add_child(helmet)
+
+	# --- Left arm ---
+	var arm_l := MeshInstance3D.new()
+	var arm_mesh_l := CapsuleMesh.new()
+	arm_mesh_l.radius = 0.09
+	arm_mesh_l.height = 0.5
+	arm_l.mesh = arm_mesh_l
+	var mat_arm := StandardMaterial3D.new()
+	mat_arm.albedo_color = c.darkened(0.2)
+	mat_arm.roughness = 0.85
+	arm_l.set_surface_override_material(0, mat_arm)
+	arm_l.rotation_degrees = Vector3(0, 0, 25)
+	arm_l.position = Vector3(-0.38, 0.45, 0)
+	root.add_child(arm_l)
+
+	# --- Right arm ---
+	var arm_r := MeshInstance3D.new()
+	var arm_mesh_r := CapsuleMesh.new()
+	arm_mesh_r.radius = 0.09
+	arm_mesh_r.height = 0.5
+	arm_r.mesh = arm_mesh_r
+	var mat_arm_r := StandardMaterial3D.new()
+	mat_arm_r.albedo_color = c.darkened(0.2)
+	mat_arm_r.roughness = 0.85
+	arm_r.set_surface_override_material(0, mat_arm_r)
+	arm_r.rotation_degrees = Vector3(0, 0, -25)
+	arm_r.position = Vector3(0.38, 0.45, 0)
+	root.add_child(arm_r)
+
+	# --- Left leg ---
+	var leg_l := MeshInstance3D.new()
+	var leg_mesh_l := CapsuleMesh.new()
+	leg_mesh_l.radius = 0.1
+	leg_mesh_l.height = 0.55
+	leg_l.mesh = leg_mesh_l
+	var mat_leg := StandardMaterial3D.new()
+	mat_leg.albedo_color = Color(0.15, 0.15, 0.2)
+	mat_leg.roughness = 0.9
+	leg_l.set_surface_override_material(0, mat_leg)
+	leg_l.position = Vector3(-0.17, 0.0, 0)
+	root.add_child(leg_l)
+
+	# --- Right leg ---
+	var leg_r := MeshInstance3D.new()
+	var leg_mesh_r := CapsuleMesh.new()
+	leg_mesh_r.radius = 0.1
+	leg_mesh_r.height = 0.55
+	leg_r.mesh = leg_mesh_r
+	var mat_leg_r := StandardMaterial3D.new()
+	mat_leg_r.albedo_color = Color(0.15, 0.15, 0.2)
+	mat_leg_r.roughness = 0.9
+	leg_r.set_surface_override_material(0, mat_leg_r)
+	leg_r.position = Vector3(0.17, 0.0, 0)
+	root.add_child(leg_r)
+
+	return root
 
 func _on_enemy_died(enemy: Node) -> void:
 	kill_count += 1

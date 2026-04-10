@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://walk_scene"]
+[gd_scene load_steps=17 format=3 uid="uid://walk_scene"]
 
 [ext_resource type="Script" path="res://scripts/walk_scene.gd" id="1_walk"]
 [ext_resource type="Script" path="res://scripts/player_controller.gd" id="2_player"]
@@ -20,27 +20,53 @@ background_mode = 2
 sky = SubResource("sky_1")
 ambient_light_source = 3
 ambient_light_color = Color(0.15, 0.1, 0.1, 1)
-ambient_light_energy = 0.5
+ambient_light_energy = 0.6
 fog_enabled = true
 fog_light_color = Color(0.05, 0.02, 0.02, 1)
-fog_density = 0.03
+fog_density = 0.025
 
 [sub_resource type="BoxMesh" id="floor_mesh"]
-size = Vector3(30, 0.4, 30)
+size = Vector3(32, 0.4, 32)
 
 [sub_resource type="StandardMaterial3D" id="floor_mat"]
 albedo_color = Color(0.12, 0.12, 0.14, 1)
 roughness = 0.9
 
 [sub_resource type="BoxShape3D" id="floor_shape"]
-size = Vector3(30, 0.4, 30)
+size = Vector3(32, 0.4, 32)
+
+[sub_resource type="BoxMesh" id="wall_mesh"]
+size = Vector3(32, 4, 0.4)
+
+[sub_resource type="StandardMaterial3D" id="wall_mat"]
+albedo_color = Color(0.1, 0.08, 0.08, 1)
+roughness = 1.0
+
+[sub_resource type="BoxShape3D" id="wall_shape"]
+size = Vector3(32, 4, 0.4)
 
 [sub_resource type="CapsuleShape3D" id="player_shape"]
 radius = 0.4
 height = 1.8
 
-[sub_resource type="SphereShape3D" id="portal_shape"]
-radius = 1.2
+[sub_resource type="SphereShape3D" id="portal_area_shape"]
+radius = 1.8
+
+[sub_resource type="BoxMesh" id="microwave_body_mesh"]
+size = Vector3(1.0, 0.75, 0.75)
+
+[sub_resource type="StandardMaterial3D" id="microwave_mat"]
+albedo_color = Color(0.7, 0.7, 0.65, 1)
+roughness = 0.4
+metallic = 0.5
+
+[sub_resource type="BoxMesh" id="microwave_door_mesh"]
+size = Vector3(0.85, 0.6, 0.06)
+
+[sub_resource type="StandardMaterial3D" id="microwave_door_mat"]
+albedo_color = Color(0.05, 0.05, 0.05, 1)
+roughness = 0.3
+metallic = 0.4
 
 ; ---- ROOT ----
 [node name="WalkScene" type="Node3D"]
@@ -52,13 +78,15 @@ environment = SubResource("env_1")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 10, 0)
-light_color = Color(0.9, 0.7, 0.6, 1)
-light_energy = 0.8
+light_color = Color(0.9, 0.75, 0.65, 1)
+light_energy = 0.9
 shadow_enabled = true
 
 ; ---- FLOOR ----
 [node name="Floor" type="StaticBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, 0)
+collision_layer = 1
+collision_mask = 0
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
 mesh = SubResource("floor_mesh")
@@ -66,6 +94,55 @@ surface_material_override/0 = SubResource("floor_mat")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
 shape = SubResource("floor_shape")
+
+; ---- WALLS ----
+[node name="WallNorth" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.0, -16)
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallNorth"]
+mesh = SubResource("wall_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallNorth"]
+shape = SubResource("wall_shape")
+
+[node name="WallSouth" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.0, 16)
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallSouth"]
+mesh = SubResource("wall_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallSouth"]
+shape = SubResource("wall_shape")
+
+[node name="WallEast" type="StaticBody3D" parent="."]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 16, 2.0, 0)
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallEast"]
+mesh = SubResource("wall_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallEast"]
+shape = SubResource("wall_shape")
+
+[node name="WallWest" type="StaticBody3D" parent="."]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -16, 2.0, 0)
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallWest"]
+mesh = SubResource("wall_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallWest"]
+shape = SubResource("wall_shape")
 
 ; ---- PLAYER ----
 [node name="Player" type="CharacterBody3D" parent="."]
@@ -75,7 +152,6 @@ collision_layer = 2
 collision_mask = 1
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
 shape = SubResource("player_shape")
 
 [node name="Head" type="Node3D" parent="Player"]
@@ -85,39 +161,53 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
 fov = 85.0
 
 [node name="RayCast3D" type="RayCast3D" parent="Player/Head/Camera3D"]
-target_position = Vector3(0, 0, -20)
+enabled = true
+target_position = Vector3(0, 0, -30)
 collision_mask = 4
 
 [node name="MuzzleFlash" type="OmniLight3D" parent="Player/Head/Camera3D"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, -0.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.22, -0.18, -0.7)
 visible = false
 light_color = Color(1, 0.8, 0.3, 1)
-light_energy = 8.0
-omni_range = 3.0
+light_energy = 10.0
+omni_range = 4.0
 
 ; ---- MICROWAVE PORTAL ----
+; Area3D: layer 8, mask 2 (detects player on layer 2)
 [node name="MicrowavePortal" type="Area3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -7)
 script = ExtResource("3_portal")
 collision_layer = 8
 collision_mask = 2
+monitoring = true
+monitorable = false
 
+; Microwave body mesh
 [node name="MeshInstance3D" type="MeshInstance3D" parent="MicrowavePortal"]
-mesh = SubResource("floor_mesh")
+mesh = SubResource("microwave_body_mesh")
+surface_material_override/0 = SubResource("microwave_mat")
 
+; Microwave door (dark glass face)
+[node name="DoorMesh" type="MeshInstance3D" parent="MicrowavePortal"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.4)
+mesh = SubResource("microwave_door_mesh")
+surface_material_override/0 = SubResource("microwave_door_mat")
+
+; Detection sphere (larger than mesh so player triggers it when close)
 [node name="CollisionShape3D" type="CollisionShape3D" parent="MicrowavePortal"]
-shape = SubResource("portal_shape")
+shape = SubResource("portal_area_shape")
 
 [node name="OmniLight3D" type="OmniLight3D" parent="MicrowavePortal"]
 light_color = Color(0, 0.8, 1, 1)
 light_energy = 3.0
-omni_range = 5.0
+omni_range = 6.0
 
 [node name="Label3D" type="Label3D" parent="MicrowavePortal"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
-text = "MICROWAVE"
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
+text = "MICROWAVE\n[Hold E]"
 font_size = 48
 modulate = Color(0, 0.9, 1, 1)
+billboard = 1
 
 ; ---- ENEMY SPAWNER ----
 [node name="EnemySpawner" type="Node3D" parent="."]
