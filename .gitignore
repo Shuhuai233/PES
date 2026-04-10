@@ -1,0 +1,5 @@
+# Git ignore Godot internals and large binaries
+.godot/
+*.import
+builds/*.exe
+builds/*.pck
