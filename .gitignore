@@ -1,5 +1,19 @@
-# Git ignore Godot internals and large binaries
+# Godot cache — never commit these
 .godot/
 *.import
+*.uid
+
+# Exported binaries — tracked as zips in builds/ only
 builds/*.exe
 builds/*.pck
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# VS Code
+.vscode/
+
+# JetBrains
+.idea/
