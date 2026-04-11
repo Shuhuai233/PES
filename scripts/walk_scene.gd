@@ -24,14 +24,17 @@ func _ready() -> void:
 
 func _setup_psx() -> void:
 	# --- Post-process overlay ---
+	# Create the ShaderMaterial and hand it to PSXManager so it can push
+	# live Inspector changes to it every frame.
 	var pp_shader := load("res://shaders/psx_postprocess.gdshader") as Shader
 	if pp_shader:
 		var pp_mat := ShaderMaterial.new()
 		pp_mat.shader = pp_shader
 		psx_overlay.material = pp_mat
+		PSXManager.register_postprocess(pp_mat)
 
 	# --- Apply PSX surface shader to all static scene meshes ---
-	# Floor, walls, microwave — everything already in the scene tree
+	# Floor, walls, microwave — everything already in the scene tree.
 	PSXManager.apply_to_node(self)
 
 func _connect_signals() -> void:
