@@ -20,10 +20,17 @@ background_mode = 2
 sky = SubResource("sky_1")
 ambient_light_source = 3
 ambient_light_color = Color(0.15, 0.1, 0.1, 1)
-ambient_light_energy = 0.6
+ambient_light_energy = 0.35
 fog_enabled = true
 fog_light_color = Color(0.05, 0.02, 0.02, 1)
-fog_density = 0.025
+fog_density = 0.06
+glow_enabled = false
+ssao_enabled = false
+ssil_enabled = false
+ssr_enabled = false
+adjustment_enabled = true
+adjustment_contrast = 1.15
+adjustment_saturation = 0.85
 
 [sub_resource type="BoxMesh" id="floor_mesh"]
 size = Vector3(32, 0.4, 32)
@@ -212,6 +219,18 @@ billboard = 1
 ; ---- ENEMY SPAWNER ----
 [node name="EnemySpawner" type="Node3D" parent="."]
 script = ExtResource("4_spawner")
+
+; ---- PSX POST-PROCESS OVERLAY ----
+; Runs at native resolution — purely aesthetic, no resolution lock
+[node name="PSXPostProcess" type="CanvasLayer" parent="."]
+layer = -1
+
+[node name="PSXOverlay" type="ColorRect" parent="PSXPostProcess"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 
 ; ---- WALKTHROUGH UI ----
 [node name="WalkthroughUI" type="CanvasLayer" parent="."]

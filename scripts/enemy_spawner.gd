@@ -74,10 +74,7 @@ func _create_enemy() -> CharacterBody3D:
 	var torso_mesh := BoxMesh.new()
 	torso_mesh.size = Vector3(0.55, 0.65, 0.28)
 	torso.mesh = torso_mesh
-	var mat_torso := StandardMaterial3D.new()
-	mat_torso.albedo_color = c
-	mat_torso.roughness = 0.85
-	torso.set_surface_override_material(0, mat_torso)
+	torso.set_surface_override_material(0, PSXManager.make_psx_material(c))
 	torso.position = Vector3(0, 0.55, 0)
 	root.add_child(torso)
 
@@ -87,10 +84,7 @@ func _create_enemy() -> CharacterBody3D:
 	head_mesh.radius = 0.2
 	head_mesh.height = 0.4
 	head.mesh = head_mesh
-	var mat_head := StandardMaterial3D.new()
-	mat_head.albedo_color = Color(0.75, 0.55, 0.4)
-	mat_head.roughness = 0.9
-	head.set_surface_override_material(0, mat_head)
+	head.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.75, 0.55, 0.4)))
 	head.position = Vector3(0, 1.08, 0)
 	root.add_child(head)
 
@@ -100,11 +94,7 @@ func _create_enemy() -> CharacterBody3D:
 	helm_mesh.radius = 0.215
 	helm_mesh.height = 0.3
 	helmet.mesh = helm_mesh
-	var mat_helm := StandardMaterial3D.new()
-	mat_helm.albedo_color = c.darkened(0.35)
-	mat_helm.roughness = 0.5
-	mat_helm.metallic = 0.3
-	helmet.set_surface_override_material(0, mat_helm)
+	helmet.set_surface_override_material(0, PSXManager.make_psx_material(c.darkened(0.35)))
 	helmet.position = Vector3(0, 1.17, 0)
 	root.add_child(helmet)
 
@@ -114,10 +104,7 @@ func _create_enemy() -> CharacterBody3D:
 	arm_mesh_l.radius = 0.09
 	arm_mesh_l.height = 0.5
 	arm_l.mesh = arm_mesh_l
-	var mat_arm := StandardMaterial3D.new()
-	mat_arm.albedo_color = c.darkened(0.2)
-	mat_arm.roughness = 0.85
-	arm_l.set_surface_override_material(0, mat_arm)
+	arm_l.set_surface_override_material(0, PSXManager.make_psx_material(c.darkened(0.2)))
 	arm_l.rotation_degrees = Vector3(0, 0, 25)
 	arm_l.position = Vector3(-0.38, 0.45, 0)
 	root.add_child(arm_l)
@@ -128,10 +115,7 @@ func _create_enemy() -> CharacterBody3D:
 	arm_mesh_r.radius = 0.09
 	arm_mesh_r.height = 0.5
 	arm_r.mesh = arm_mesh_r
-	var mat_arm_r := StandardMaterial3D.new()
-	mat_arm_r.albedo_color = c.darkened(0.2)
-	mat_arm_r.roughness = 0.85
-	arm_r.set_surface_override_material(0, mat_arm_r)
+	arm_r.set_surface_override_material(0, PSXManager.make_psx_material(c.darkened(0.2)))
 	arm_r.rotation_degrees = Vector3(0, 0, -25)
 	arm_r.position = Vector3(0.38, 0.45, 0)
 	root.add_child(arm_r)
@@ -142,10 +126,7 @@ func _create_enemy() -> CharacterBody3D:
 	leg_mesh_l.radius = 0.1
 	leg_mesh_l.height = 0.55
 	leg_l.mesh = leg_mesh_l
-	var mat_leg := StandardMaterial3D.new()
-	mat_leg.albedo_color = Color(0.15, 0.15, 0.2)
-	mat_leg.roughness = 0.9
-	leg_l.set_surface_override_material(0, mat_leg)
+	leg_l.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.15, 0.15, 0.2)))
 	leg_l.position = Vector3(-0.17, 0.0, 0)
 	root.add_child(leg_l)
 
@@ -155,10 +136,7 @@ func _create_enemy() -> CharacterBody3D:
 	leg_mesh_r.radius = 0.1
 	leg_mesh_r.height = 0.55
 	leg_r.mesh = leg_mesh_r
-	var mat_leg_r := StandardMaterial3D.new()
-	mat_leg_r.albedo_color = Color(0.15, 0.15, 0.2)
-	mat_leg_r.roughness = 0.9
-	leg_r.set_surface_override_material(0, mat_leg_r)
+	leg_r.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.15, 0.15, 0.2)))
 	leg_r.position = Vector3(0.17, 0.0, 0)
 	root.add_child(leg_r)
 

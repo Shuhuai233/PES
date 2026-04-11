@@ -8,6 +8,7 @@ extends Node
 @onready var ui: CanvasLayer = $WalkthroughUI
 @onready var world_env: WorldEnvironment = $WorldEnvironment
 @onready var dir_light: DirectionalLight3D = $DirectionalLight3D
+@onready var psx_overlay: ColorRect = $PSXPostProcess/PSXOverlay
 
 var player_health: int = 100
 var max_health: int = 100
@@ -16,9 +17,22 @@ var session_id: String = ""
 
 func _ready() -> void:
 	session_id = SessionManager.start_session()
+	_setup_psx()
 	_connect_signals()
 	# Start spawner once stage is entered
 	spawner.deactivate()
+
+func _setup_psx() -> void:
+	# --- Post-process overlay ---
+	var pp_shader := load("res://shaders/psx_postprocess.gdshader") as Shader
+	if pp_shader:
+		var pp_mat := ShaderMaterial.new()
+		pp_mat.shader = pp_shader
+		psx_overlay.material = pp_mat
+
+	# --- Apply PSX surface shader to all static scene meshes ---
+	# Floor, walls, microwave — everything already in the scene tree
+	PSXManager.apply_to_node(self)
 
 func _connect_signals() -> void:
 	# Player signals

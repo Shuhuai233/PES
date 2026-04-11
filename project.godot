@@ -18,6 +18,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 SessionManager="*res://scripts/session_manager.gd"
+PSXManager="*res://scripts/psx_manager.gd"
 
 [input]
 

@@ -60,10 +60,7 @@ func _build_gun() -> void:
 	var body_mesh := BoxMesh.new()
 	body_mesh.size = Vector3(0.06, 0.1, 0.32)
 	body.mesh = body_mesh
-	var mat_body := StandardMaterial3D.new()
-	mat_body.albedo_color = Color(0.15, 0.15, 0.15)
-	mat_body.roughness = 0.8
-	body.set_surface_override_material(0, mat_body)
+	body.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.15, 0.15, 0.15)))
 	gun_pivot.add_child(body)
 
 	# === BARREL ===
@@ -73,11 +70,7 @@ func _build_gun() -> void:
 	barrel_mesh.bottom_radius = 0.018
 	barrel_mesh.height = 0.22
 	barrel.mesh = barrel_mesh
-	var mat_barrel := StandardMaterial3D.new()
-	mat_barrel.albedo_color = Color(0.2, 0.2, 0.2)
-	mat_barrel.roughness = 0.5
-	mat_barrel.metallic = 0.6
-	barrel.set_surface_override_material(0, mat_barrel)
+	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.2, 0.2, 0.2)))
 	barrel.rotation_degrees = Vector3(90, 0, 0)
 	barrel.position = Vector3(0.0, 0.02, -0.27)
 	gun_pivot.add_child(barrel)
@@ -87,10 +80,7 @@ func _build_gun() -> void:
 	var grip_mesh := BoxMesh.new()
 	grip_mesh.size = Vector3(0.055, 0.12, 0.075)
 	grip.mesh = grip_mesh
-	var mat_grip := StandardMaterial3D.new()
-	mat_grip.albedo_color = Color(0.25, 0.15, 0.08)
-	mat_grip.roughness = 0.95
-	grip.set_surface_override_material(0, mat_grip)
+	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.25, 0.15, 0.08)))
 	grip.rotation_degrees = Vector3(15, 0, 0)
 	grip.position = Vector3(0.0, -0.11, 0.08)
 	gun_pivot.add_child(grip)
@@ -103,9 +93,7 @@ func _build_gun() -> void:
 	tg_mesh.rings = 8
 	tg_mesh.ring_segments = 6
 	tg.mesh = tg_mesh
-	var mat_tg := StandardMaterial3D.new()
-	mat_tg.albedo_color = Color(0.15, 0.15, 0.15)
-	tg.set_surface_override_material(0, mat_tg)
+	tg.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.15, 0.15, 0.15)))
 	tg.rotation_degrees = Vector3(0, 90, 0)
 	tg.position = Vector3(0.0, -0.06, 0.03)
 	gun_pivot.add_child(tg)
@@ -116,10 +104,7 @@ func _build_gun() -> void:
 	arm_mesh_l.radius = 0.04
 	arm_mesh_l.height = 0.28
 	arm_l.mesh = arm_mesh_l
-	var mat_arm := StandardMaterial3D.new()
-	mat_arm.albedo_color = Color(0.75, 0.55, 0.42)
-	mat_arm.roughness = 0.9
-	arm_l.set_surface_override_material(0, mat_arm)
+	arm_l.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.75, 0.55, 0.42)))
 	arm_l.rotation_degrees = Vector3(70, 10, 10)
 	arm_l.position = Vector3(-0.14, -0.13, 0.05)
 	camera.add_child(arm_l)
@@ -130,10 +115,7 @@ func _build_gun() -> void:
 	arm_mesh_r.radius = 0.04
 	arm_mesh_r.height = 0.28
 	arm_r.mesh = arm_mesh_r
-	var mat_arm_r := StandardMaterial3D.new()
-	mat_arm_r.albedo_color = Color(0.75, 0.55, 0.42)
-	mat_arm_r.roughness = 0.9
-	arm_r.set_surface_override_material(0, mat_arm_r)
+	arm_r.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.75, 0.55, 0.42)))
 	arm_r.rotation_degrees = Vector3(70, -10, -10)
 	arm_r.position = Vector3(0.22, -0.13, 0.05)
 	camera.add_child(arm_r)
