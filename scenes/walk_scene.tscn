@@ -8,10 +8,10 @@
 [ext_resource type="Script" path="res://scripts/walkthrough_ui.gd" id="5_ui"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
-sky_top_color = Color(0.05, 0.05, 0.08, 1)
-sky_horizon_color = Color(0.1, 0.05, 0.05, 1)
-ground_bottom_color = Color(0.02, 0.02, 0.02, 1)
-ground_horizon_color = Color(0.05, 0.03, 0.03, 1)
+sky_top_color = Color(0.02, 0.01, 0.06, 1)
+sky_horizon_color = Color(0.06, 0.03, 0.1, 1)
+ground_bottom_color = Color(0.01, 0.01, 0.02, 1)
+ground_horizon_color = Color(0.04, 0.02, 0.06, 1)
 
 [sub_resource type="Sky" id="sky_1"]
 sky_material = SubResource("sky_mat")
@@ -20,25 +20,25 @@ sky_material = SubResource("sky_mat")
 background_mode = 2
 sky = SubResource("sky_1")
 ambient_light_source = 3
-ambient_light_color = Color(0.15, 0.1, 0.1, 1)
-ambient_light_energy = 0.35
+ambient_light_color = Color(0.08, 0.06, 0.14, 1)
+ambient_light_energy = 0.25
 fog_enabled = true
-fog_light_color = Color(0.05, 0.02, 0.02, 1)
-fog_density = 0.06
+fog_light_color = Color(0.06, 0.04, 0.1, 1)
+fog_density = 0.08
 glow_enabled = false
 ssao_enabled = false
 ssil_enabled = false
 ssr_enabled = false
 adjustment_enabled = true
-adjustment_contrast = 1.15
-adjustment_saturation = 0.85
+adjustment_contrast = 1.2
+adjustment_saturation = 0.7
 
 [sub_resource type="BoxMesh" id="floor_mesh"]
 size = Vector3(32, 0.4, 32)
 
 [sub_resource type="StandardMaterial3D" id="floor_mat"]
-albedo_color = Color(0.12, 0.12, 0.14, 1)
-roughness = 0.9
+albedo_color = Color(0.08, 0.07, 0.1, 1)
+roughness = 0.95
 
 [sub_resource type="BoxShape3D" id="floor_shape"]
 size = Vector3(32, 0.4, 32)
@@ -47,7 +47,7 @@ size = Vector3(32, 0.4, 32)
 size = Vector3(32, 4, 0.4)
 
 [sub_resource type="StandardMaterial3D" id="wall_mat"]
-albedo_color = Color(0.1, 0.08, 0.08, 1)
+albedo_color = Color(0.07, 0.06, 0.09, 1)
 roughness = 1.0
 
 [sub_resource type="BoxShape3D" id="wall_shape"]
@@ -86,8 +86,8 @@ environment = SubResource("env_1")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 10, 0)
-light_color = Color(0.9, 0.75, 0.65, 1)
-light_energy = 0.9
+light_color = Color(0.95, 0.82, 0.65, 1)
+light_energy = 0.75
 shadow_enabled = true
 
 ; ---- FLOOR ----
@@ -166,7 +166,8 @@ shape = SubResource("player_shape")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
 
 [node name="Camera3D" type="Camera3D" parent="Player/Head"]
-fov = 85.0
+fov = 75.0
+far = 40.0
 
 [node name="RayCast3D" type="RayCast3D" parent="Player/Head/Camera3D"]
 enabled = true

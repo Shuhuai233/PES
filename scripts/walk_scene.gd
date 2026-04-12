@@ -2,10 +2,10 @@ extends Node
 
 ## WalkScene controller — orchestrates all systems for the walkthrough version
 
-@onready var player: CharacterBody3D = $Player
-@onready var portal: Area3D = $MicrowavePortal
-@onready var spawner: Node3D = $EnemySpawner
-@onready var ui: CanvasLayer = $WalkthroughUI
+@onready var player := $Player   ## player_controller.gd
+@onready var portal := $MicrowavePortal
+@onready var spawner := $EnemySpawner
+@onready var ui := $WalkthroughUI  ## walkthrough_ui.gd
 @onready var world_env: WorldEnvironment = $WorldEnvironment
 @onready var dir_light: DirectionalLight3D = $DirectionalLight3D
 @onready var psx_overlay: ColorRect = $PSXPostProcess/PSXOverlay
@@ -43,6 +43,7 @@ func _connect_signals() -> void:
 	player.jammed.connect(_on_player_jammed)
 	player.jam_cleared.connect(_on_jam_cleared)
 	player.shot_fired.connect(_on_shot_fired)
+	player.stamina_changed.connect(ui.update_stamina)
 
 	# Portal signals
 	portal.player_entered_portal.connect(_on_player_entered_portal)
@@ -60,18 +61,34 @@ func _process(_delta: float) -> void:
 	var near_portal: bool = portal.player_inside
 	ui.update_extract_bar(portal.get_extract_progress(), near_portal)
 
-	# Detect movement for tutorial progression
+	# ── 教程进度检测 ──────────────────────────
+	# 移动检测
 	if player.velocity.length() > 0.5:
 		ui.notify_movement_detected()
 
-	# Detect mouse look (rotation changed)
+	# 奔跑检测
+	if player.is_sprinting():
+		ui.notify_sprint_detected()
+
+	# 跳跃检测（离地且向上）
+	if not player.is_on_floor() and player.velocity.y > 0.5:
+		ui.notify_jump_detected()
+
+	# 蹲下检测
+	if player.get_is_crouching():
+		ui.notify_crouch_detected()
+
+	# 视角检测
 	if abs(player.head.rotation.x) > 0.05:
 		ui.notify_look_detected()
 
-	# Show portal label hint when player is close
-	var dist := player.global_position.distance_to(portal.global_position)
+	# 靠近传送门
+	var dist: float = player.global_position.distance_to(portal.global_position)
 	if dist < 5.0:
 		ui.notify_player_near_portal()
+
+	# 换弹状态同步到 HUD
+	ui.show_reload(player.is_reloading)
 
 func _on_player_jammed() -> void:
 	ui.show_jam(true)
@@ -82,6 +99,8 @@ func _on_jam_cleared() -> void:
 	ui.show_jam(false)
 	if ui.current_step == ui.TutorialStep.JAM_CLEAR:
 		ui.advance_step()   # -> EXTRACT step
+	elif ui.current_step == ui.TutorialStep.RELOAD:
+		ui.advance_step()   # JAM 在换弹步骤出现时也推进到 EXTRACT
 
 func _on_shot_fired() -> void:
 	SessionManager.set_value("shots_fired",
