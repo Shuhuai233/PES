@@ -18,6 +18,7 @@ extends Node
 const PSX_SHADER_PATH := "res://shaders/psx_surface.gdshader"
 
 # ── Master toggle ──────────────────────────────────────────────────────────────
+## 总开关。关闭后 make_psx_material() 和 apply_to_node() 不再生效。
 @export var enabled: bool = true
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -27,38 +28,41 @@ const PSX_SHADER_PATH := "res://shaders/psx_surface.gdshader"
 # ── Vertex Snapping ───────────────────────────────────────────────────────────
 @export_group("Vertex Snap (The Wobble)")
 
-## Coarseness of the snap grid.
-## 128 = authentic PS1.  256 = subtle.  64 = extreme/surreal.
+## 顶点吸附网格精度 — 越小抖动越剧烈。
+## 128 = 真实 PS1 级别，256 = 轻微抖动，64 = 极端/超现实。
 @export_range(32.0, 512.0, 1.0) var snap_resolution: float = 128.0
 
-## 0 = no jitter at all.  1 = full PS1-level wobble.
+## 抖动强度混合 — 0 = 完全关闭，1 = 最大 PS1 级摆动。
 @export_range(0.0, 1.0, 0.01) var snap_strength: float = 0.85
 
 # ── Affine Texture Warp ──────────────────────────────────────────────────────
 @export_group("Affine Texture Warp")
 
-## 0 = perspective-correct (modern).  1 = pure PS1 affine swim.
+## 仿射贴图扭曲程度 — 0 = 现代透视正确，1 = PS1 贴图游泳变形。
+## 地板斜看时最明显。
 @export_range(0.0, 1.0, 0.01) var affine_strength: float = 0.8
 
 # ── Colour Depth (Surface) ───────────────────────────────────────────────────
 @export_group("Colour Depth (Surface)")
 
-## Snap each colour channel to 32 levels on the mesh itself.
+## 每通道 5-bit 色彩量化（32 级）— 模拟 PS1 的 15-bit 帧缓冲。
+## 关闭则网格上不做色阶压缩。
 @export var quantize_color: bool = true
 
 # ── Per-Vertex Fog ────────────────────────────────────────────────────────────
 @export_group("Vertex Fog (PS1-style)")
 
-## Enable PS1-style per-vertex distance fog (creates banding on large polys).
+## 开关 PS1 式逐顶点雾效 — 大多边形上会出现可见的"雾带"，
+## 这是 PS1 的特征之一（雾在顶点而非像素级别计算）。
 @export var vertex_fog_enabled: bool = true
 
-## Fog colour — dark blue-purple for the reference aesthetic.
+## 雾的颜色 — 当前深蓝紫，配合恐怖/迷离氛围。
 @export var fog_color: Color = Color(0.06, 0.04, 0.1, 1.0)
 
-## Distance where fog begins (in metres from camera).
+## 雾开始的距离（米）— 越小越近处就开始起雾。
 @export_range(0.0, 50.0, 0.5) var fog_start: float = 3.0
 
-## Distance where fog is fully opaque.
+## 雾完全不透明的距离 — 越小可视距离越短。
 @export_range(1.0, 80.0, 0.5) var fog_end: float = 28.0
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -68,66 +72,66 @@ const PSX_SHADER_PATH := "res://shaders/psx_surface.gdshader"
 # ── Resolution Downsampling ───────────────────────────────────────────────────
 @export_group("Post-Process Resolution")
 
-## Simulates PS1's low internal resolution.
-## 320 = authentic PS1.  0 = disabled (native res).
+## 模拟 PS1 低分辨率帧缓冲 — UV 吸附到粗像素网格。
+## 320 = 真实 PS1 横向分辨率，0 = 关闭（使用原生分辨率）。
 @export_range(0.0, 640.0, 1.0) var downsample_resolution: float = 320.0
 
 # ── Film Grain ────────────────────────────────────────────────────────────────
 @export_group("Post-Process Film Grain")
 
-## Organic animated noise — gives the "dirty film" look.
+## 逐帧随机噪点强度 — 模拟"脏胶片"质感。
+## 与 Bayer 抖动不同，这个是有机的动态噪声。
 @export_range(0.0, 0.15, 0.005) var grain_strength: float = 0.06
 
 # ── Bayer Dithering ───────────────────────────────────────────────────────────
 @export_group("Post-Process Dither")
 
-## Intensity of the Bayer 4×4 dot-matrix grain.
+## Bayer 4×4 有序抖动强度 — 让色阶过渡产生点阵颗粒而非硬跳变。
 @export_range(0.0, 1.0, 0.01) var dither_strength: float = 0.5
 
-## Colour levels per channel in the post-process pass.
-## 24 = slightly more banded than PS1.  32 = exact PS1.
+## 后处理色阶数 — 32 = PS1 精确，24 = 稍多色带，8 = 极端色阶压缩。
 @export_range(4.0, 64.0, 1.0) var color_levels: float = 24.0
 
 # ── Colour Grading ────────────────────────────────────────────────────────────
 @export_group("Post-Process Colour Grading")
 
-## Shadow tint colour (blue-purple for horror / liminal aesthetic).
+## 暗部色调偏移 — 蓝紫色让阴影区域带冷色，营造恐怖/迷离感。
 @export var shadow_tint: Color = Color(0.12, 0.08, 0.22, 1.0)
 
-## Highlight tint colour (warm yellow for interior lights).
+## 亮部色调偏移 — 暖黄色模拟室内灯光，与冷色暗部形成对比。
 @export var highlight_tint: Color = Color(1.0, 0.92, 0.78, 1.0)
 
-## How strongly the tints are applied.
+## 色调映射强度 — 0 = 不着色，1 = 最大偏移。
 @export_range(0.0, 1.0, 0.01) var tint_strength: float = 0.35
 
 # ── Contrast / Brightness / Saturation ────────────────────────────────────────
 @export_group("Post-Process Levels")
 
-## Contrast — >1 = crushed shadows & bright highlights.
+## 对比度 — >1 压暗阴影、提亮高光，增强明暗反差。
 @export_range(0.5, 2.0, 0.01) var pp_contrast: float = 1.25
 
-## Brightness offset.
+## 整体亮度偏移 — 负值稍微压暗整个画面。
 @export_range(-0.3, 0.3, 0.01) var pp_brightness: float = -0.04
 
-## Saturation — <1 = desaturated, muted colours (PS1 CRT look).
+## 饱和度 — <1 去饱和，模拟 PS1 CRT 的灰暗色彩。
 @export_range(0.0, 1.5, 0.01) var pp_saturation: float = 0.7
 
 # ── CRT Scanlines ─────────────────────────────────────────────────────────────
 @export_group("Post-Process Scanlines")
 
-## Toggle every-other-row CRT darkening.
+## 开关 CRT 扫描线 — 隔行暗化，模拟老式 CRT 显示器。
 @export var scanlines_enabled: bool = true
 
-## How dark the scanline rows become.
+## 扫描线暗化强度 — 0.2 = 微妙可见，0.4 = 非常明显。
 @export_range(0.0, 0.5, 0.01) var scanline_strength: float = 0.2
 
 # ── Vignette ──────────────────────────────────────────────────────────────────
 @export_group("Post-Process Vignette")
 
-## Darkens screen edges — PS1 CRTs had natural brightness falloff.
+## 屏幕边缘暗化强度 — 模拟 CRT 显示器边缘自然亮度衰减。
 @export_range(0.0, 1.0, 0.01) var vignette_strength: float = 0.35
 
-## How far from center before darkening starts.
+## 暗角起始位置 — 越小中心亮区越小，暗角越大。
 @export_range(0.0, 2.0, 0.01) var vignette_radius: float = 0.85
 
 # ── Internal state ─────────────────────────────────────────────────────────────
