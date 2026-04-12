@@ -11,9 +11,16 @@ builds/*.pck
 .DS_Store
 Thumbs.db
 desktop.ini
+*.Zone.Identifier
 
 # VS Code
 .vscode/
 
 # JetBrains
 .idea/
+
+# Node modules (MCP server)
+mcp/node_modules/
+
+# Tool config
+opencode.json

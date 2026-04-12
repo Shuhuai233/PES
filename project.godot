@@ -13,7 +13,6 @@ config_version=5
 config/name="PES"
 run/main_scene="res://scenes/walk_scene.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
-config/icon="res://icon.svg"
 
 [autoload]
 

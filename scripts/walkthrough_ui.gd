@@ -77,7 +77,6 @@ var fade_panel: ColorRect
 # ─────────────────────────────────────────────
 # 状态
 # ─────────────────────────────────────────────
-var player_ref: Node = null
 var kill_count: int = 0
 var player_health: int = 100
 var _step_blink_timer: float = 0.0

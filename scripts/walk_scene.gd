@@ -52,6 +52,7 @@ func _connect_signals() -> void:
 
 	# Spawner signals
 	spawner.enemy_killed.connect(_on_enemy_killed)
+	spawner.enemy_spawned.connect(_on_enemy_spawned)
 
 	# UI signals
 	ui.walkthrough_complete.connect(_on_walkthrough_complete)
@@ -129,6 +130,10 @@ func _on_extraction_complete() -> void:
 func _on_enemy_killed(_enemy: Node, total: int) -> void:
 	ui.update_kills(total)
 	SessionManager.set_value("kills", total)
+
+func _on_enemy_spawned(enemy: Node) -> void:
+	if enemy.has_signal("damaged_player"):
+		enemy.damaged_player.connect(take_damage)
 
 func _on_walkthrough_complete() -> void:
 	print("Walkthrough complete!")
