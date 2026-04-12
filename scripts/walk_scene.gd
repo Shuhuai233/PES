@@ -1,14 +1,18 @@
 extends Node
 
 ## WalkScene controller — orchestrates all systems for the walkthrough version
+const ItemDataRes := preload("res://scripts/item_data.gd")
 
-@onready var player := $Player   ## player_controller.gd
+@onready var player := $Player           ## player_controller.gd
 @onready var portal := $MicrowavePortal
-@onready var spawner := $EnemySpawner
-@onready var ui := $WalkthroughUI  ## walkthrough_ui.gd
+@onready var spawner := $EnemySpawner    ## enemy_spawner.gd
+@onready var ui := $WalkthroughUI        ## walkthrough_ui.gd
 @onready var world_env: WorldEnvironment = $WorldEnvironment
 @onready var dir_light: DirectionalLight3D = $DirectionalLight3D
 @onready var psx_overlay: ColorRect = $PSXPostProcess/PSXOverlay
+
+var loot_spawner_node: Node3D = null
+var inventory_ui_node: CanvasLayer = null
 
 var player_health: int = 100
 var max_health: int = 100
@@ -18,24 +22,31 @@ var session_id: String = ""
 func _ready() -> void:
 	session_id = SessionManager.start_session()
 	_setup_psx()
+	_setup_loot()
+	_setup_inventory_ui()
 	_connect_signals()
-	# Start spawner once stage is entered
 	spawner.deactivate()
 
 func _setup_psx() -> void:
-	# --- Post-process overlay ---
-	# Create the ShaderMaterial and hand it to PSXManager so it can push
-	# live Inspector changes to it every frame.
 	var pp_shader := load("res://shaders/psx_postprocess.gdshader") as Shader
 	if pp_shader:
 		var pp_mat := ShaderMaterial.new()
 		pp_mat.shader = pp_shader
 		psx_overlay.material = pp_mat
 		PSXManager.register_postprocess(pp_mat)
-
-	# --- Apply PSX surface shader to all static scene meshes ---
-	# Floor, walls, microwave — everything already in the scene tree.
 	PSXManager.apply_to_node(self)
+
+func _setup_loot() -> void:
+	loot_spawner_node = Node3D.new()
+	loot_spawner_node.name = "LootSpawner"
+	loot_spawner_node.set_script(load("res://scripts/loot_spawner.gd"))
+	add_child(loot_spawner_node)
+
+func _setup_inventory_ui() -> void:
+	inventory_ui_node = CanvasLayer.new()
+	inventory_ui_node.name = "InventoryUI"
+	inventory_ui_node.set_script(load("res://scripts/inventory_ui.gd"))
+	add_child(inventory_ui_node)
 
 func _connect_signals() -> void:
 	# Player signals
@@ -57,40 +68,48 @@ func _connect_signals() -> void:
 	# UI signals
 	ui.walkthrough_complete.connect(_on_walkthrough_complete)
 
+	# Loot signals
+	if loot_spawner_node:
+		loot_spawner_node.loot_picked_up.connect(_on_loot_picked_up)
+
+	# Inventory signals
+	Inventory.weapon_equipped.connect(_on_weapon_equipped)
+	Inventory.inventory_full.connect(_on_inventory_full)
+
+	# Inventory UI signals
+	if inventory_ui_node:
+		inventory_ui_node.ui_opened.connect(func(): player.inventory_open = true)
+		inventory_ui_node.ui_closed.connect(func(): player.inventory_open = false)
+
+# ─────────────────────────────────────────────
+# Process
+# ─────────────────────────────────────────────
 func _process(_delta: float) -> void:
-	# Update extract bar
+	# Extract bar
 	var near_portal: bool = portal.player_inside
 	ui.update_extract_bar(portal.get_extract_progress(), near_portal)
 
-	# ── 教程进度检测 ──────────────────────────
-	# 移动检测
+	# ── Tutorial detection ────────────────────
 	if player.velocity.length() > 0.5:
 		ui.notify_movement_detected()
-
-	# 奔跑检测
 	if player.is_sprinting():
 		ui.notify_sprint_detected()
-
-	# 跳跃检测（离地且向上）
 	if not player.is_on_floor() and player.velocity.y > 0.5:
 		ui.notify_jump_detected()
-
-	# 蹲下检测
 	if player.get_is_crouching():
 		ui.notify_crouch_detected()
-
-	# 视角检测
 	if abs(player.head.rotation.x) > 0.05:
 		ui.notify_look_detected()
 
-	# 靠近传送门
 	var dist: float = player.global_position.distance_to(portal.global_position)
 	if dist < 5.0:
 		ui.notify_player_near_portal()
 
-	# 换弹状态同步到 HUD
 	ui.show_reload(player.is_reloading)
 
+# ─────────────────────────────────────────────
+# Callbacks — combat
+# ─────────────────────────────────────────────
 func _on_player_jammed() -> void:
 	ui.show_jam(true)
 	SessionManager.set_value("jams_encountered",
@@ -99,37 +118,45 @@ func _on_player_jammed() -> void:
 func _on_jam_cleared() -> void:
 	ui.show_jam(false)
 	if ui.current_step == ui.TutorialStep.JAM_CLEAR:
-		ui.advance_step()   # -> EXTRACT step
+		ui.advance_step()
 	elif ui.current_step == ui.TutorialStep.RELOAD:
-		ui.advance_step()   # JAM 在换弹步骤出现时也推进到 EXTRACT
+		ui.advance_step()
 
 func _on_shot_fired() -> void:
 	SessionManager.set_value("shots_fired",
 		int(SessionManager.get_value("shots_fired", 0)) + 1)
 	if ui.current_step == ui.TutorialStep.ENTER_PORTAL:
-		ui.advance_step()   # -> SHOOT_ENEMIES
+		ui.advance_step()
 
 func _on_player_entered_portal() -> void:
 	in_stage = true
 	spawner.activate()
 	ui.notify_player_entered_portal()
 	SessionManager.set_value("entered_stage", true)
+	# Spawn arena loot when stage activates
+	if loot_spawner_node:
+		loot_spawner_node.spawn_arena_loot()
 
 func _on_extraction_started() -> void:
 	if ui.current_step == ui.TutorialStep.SHOOT_ENEMIES:
-		ui.advance_step()   # -> EXTRACT hint
+		ui.advance_step()
 
 func _on_extraction_complete() -> void:
 	spawner.deactivate()
 	in_stage = false
 	ui.notify_extraction_complete()
+	# Transfer backpack to stash on successful extraction
+	StashManager.transfer_backpack_to_stash()
 	var duration := SessionManager.end_session()
 	SessionManager.set_value("extraction_time", duration)
-	print("Extracted! Session duration: %.2f sec" % duration)
+	print("Extracted! Session duration: %.2f sec  |  Stash: %d items" % [duration, StashManager.get_stash_count()])
 
-func _on_enemy_killed(_enemy: Node, total: int) -> void:
+func _on_enemy_killed(enemy: Node, total: int) -> void:
 	ui.update_kills(total)
 	SessionManager.set_value("kills", total)
+	# Enemy loot drop
+	if loot_spawner_node and is_instance_valid(enemy):
+		loot_spawner_node.try_enemy_drop((enemy as Node3D).global_position)
 
 func _on_enemy_spawned(enemy: Node) -> void:
 	if enemy.has_signal("damaged_player"):
@@ -138,7 +165,25 @@ func _on_enemy_spawned(enemy: Node) -> void:
 func _on_walkthrough_complete() -> void:
 	print("Walkthrough complete!")
 
-## Called by enemy when it damages the player
+# ─────────────────────────────────────────────
+# Callbacks — loot & inventory
+# ─────────────────────────────────────────────
+func _on_loot_picked_up(item: Resource, qty: int) -> void:
+	if inventory_ui_node:
+		inventory_ui_node.show_pickup(item, qty)
+	SessionManager.set_value("items_picked",
+		int(SessionManager.get_value("items_picked", 0)) + qty)
+
+func _on_weapon_equipped(item: Resource) -> void:
+	player.equip_weapon(item)
+
+func _on_inventory_full() -> void:
+	# Could show HUD flash — for now just print
+	print("Backpack full!")
+
+# ─────────────────────────────────────────────
+# Damage / Death
+# ─────────────────────────────────────────────
 func take_damage(amount: int) -> void:
 	player_health = max(0, player_health - amount)
 	ui.update_health(player_health)
@@ -148,7 +193,8 @@ func take_damage(amount: int) -> void:
 		_on_player_died()
 
 func _on_player_died() -> void:
-	print("Player died — restarting scene")
+	print("Player died — all backpack items lost")
+	Inventory.clear_all()  # items lost on death
 	SessionManager.end_session()
 	await get_tree().create_timer(1.5).timeout
 	get_tree().reload_current_scene()

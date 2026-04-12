@@ -2,6 +2,7 @@ extends CharacterBody3D
 
 ## PlayerController - FPS movement, mouse look, crouch, sprint, jump, recoil, gun jam
 ## 所有可调参数均已用 @export 暴露到 Inspector
+const ItemDataRes := preload("res://scripts/item_data.gd")
 
 # ─────────────────────────────────────────────
 # @export 参数分组
@@ -88,6 +89,9 @@ extends CharacterBody3D
 # 枪械网格（运行时程序化构建）
 var gun_pivot: Node3D = null
 var gun_mesh: MeshInstance3D = null
+
+# 背包 UI 状态
+var inventory_open: bool = false
 
 # ─────────────────────────────────────────────
 # 内部状态
@@ -234,6 +238,8 @@ func _build_gun() -> void:
 # 输入（鼠标视角）
 # ─────────────────────────────────────────────
 func _input(event: InputEvent) -> void:
+	if inventory_open:
+		return  # block look/escape while inventory is open
 	if event is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
 		rotate_y(-event.relative.x * mouse_sensitivity)
 		head.rotate_x(-event.relative.y * mouse_sensitivity)
@@ -248,6 +254,8 @@ func _input(event: InputEvent) -> void:
 # 主逻辑帧
 # ─────────────────────────────────────────────
 func _process(delta: float) -> void:
+	if inventory_open:
+		return
 	_tick_shoot_timer(delta)
 	_tick_reload(delta)
 	_handle_action_input()
@@ -414,9 +422,14 @@ func _get_current_spread() -> float:
 # ─────────────────────────────────────────────
 func _physics_process(delta: float) -> void:
 	_apply_gravity(delta)
-	_handle_jump(delta)
-	_apply_movement(delta)
-	_update_stamina(delta)
+	if not inventory_open:
+		_handle_jump(delta)
+		_apply_movement(delta)
+		_update_stamina(delta)
+	else:
+		# Stop horizontal movement when inventory open
+		velocity.x = move_toward(velocity.x, 0.0, deceleration * delta)
+		velocity.z = move_toward(velocity.z, 0.0, deceleration * delta)
 	move_and_slide()
 
 func _apply_gravity(delta: float) -> void:
@@ -585,6 +598,37 @@ func _flash_muzzle() -> void:
 		await get_tree().create_timer(muzzle_flash_duration).timeout
 		if is_instance_valid(muzzle_flash):
 			muzzle_flash.visible = false
+
+# ─────────────────────────────────────────────
+# Weapon equip (from inventory)
+# ─────────────────────────────────────────────
+func equip_weapon(item: Resource) -> void:
+	if item == null or item.category != ItemDataRes.Category.WEAPON:
+		return
+	# Update gun stats from item data
+	damage_per_shot = item.damage
+	shoot_cooldown = item.fire_rate
+	magazine_size = item.weapon_magazine
+	reload_time = item.weapon_reload_time
+	jam_chance = item.weapon_jam_chance
+	spread_base = item.weapon_spread
+	# Refill ammo
+	current_ammo = magazine_size
+	is_reloading = false
+	is_jammed = false
+	can_shoot = true
+	ammo_changed.emit(current_ammo, magazine_size)
+	# Rebuild gun visuals with item color
+	if gun_pivot:
+		var body := gun_pivot.get_node_or_null("Body") as MeshInstance3D
+		if body == null:
+			# First child is body
+			for c in gun_pivot.get_children():
+				if c is MeshInstance3D:
+					body = c
+					break
+		if body:
+			body.set_surface_override_material(0, PSXManager.make_psx_material(item.mesh_color))
 
 # ─────────────────────────────────────────────
 # 辅助查询
