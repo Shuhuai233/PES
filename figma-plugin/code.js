@@ -31,7 +31,7 @@ const C = {
 // ── helpers ──────────────────────────────────────────────────
 
 function solid(color) {
-  return [{ type: 'SOLID', color: { r: color.r, g: color.g, b: color.b }, opacity: color.a ?? 1 }];
+  return [{ type: 'SOLID', color: { r: color.r, g: color.g, b: color.b }, opacity: (color.a !== undefined ? color.a : 1) }];
 }
 
 function rgb(hex) {
