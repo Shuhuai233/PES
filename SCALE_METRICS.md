@@ -2,6 +2,12 @@
 
 All units are in **Godot world units (meters)**. The scene uses a 1 unit = 1 meter convention.
 
+## Diagrams
+
+![Character Heights](docs/diagrams/character_heights.svg)
+![Cover Heights](docs/diagrams/cover_heights.svg)
+![Speed Comparison](docs/diagrams/speed_comparison.svg)
+
 ---
 
 ## Player

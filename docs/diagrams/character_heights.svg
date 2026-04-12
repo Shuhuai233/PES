@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" style="background:#1a1a2e;font-family:monospace">
+<text x="450" y="34" text-anchor="middle" font-size="18" fill="#e0e0e0" font-weight="bold">Character Height Comparison</text>
+<text x="450" y="54" text-anchor="middle" font-size="12" fill="#777" font-weight="normal">1 grid square = 0.5 m</text>
+<line x1="40" y1="460.0" x2="880" y2="460.0" stroke="#2a2a4a" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="34" y="464.0" text-anchor="end" font-size="10" fill="#555" font-weight="normal">0.0m</text>
+<line x1="40" y1="380.0" x2="880" y2="380.0" stroke="#2a2a4a" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="34" y="384.0" text-anchor="end" font-size="10" fill="#555" font-weight="normal">0.5m</text>
+<line x1="40" y1="300.0" x2="880" y2="300.0" stroke="#2a2a4a" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="34" y="304.0" text-anchor="end" font-size="10" fill="#555" font-weight="normal">1.0m</text>
+<line x1="40" y1="220.0" x2="880" y2="220.0" stroke="#2a2a4a" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="34" y="224.0" text-anchor="end" font-size="10" fill="#555" font-weight="normal">1.5m</text>
+<line x1="40" y1="140.0" x2="880" y2="140.0" stroke="#2a2a4a" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="34" y="144.0" text-anchor="end" font-size="10" fill="#555" font-weight="normal">2.0m</text>
+<line x1="40" y1="60.0" x2="880" y2="60.0" stroke="#2a2a4a" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="34" y="64.0" text-anchor="end" font-size="10" fill="#555" font-weight="normal">2.5m</text>
+<line x1="40" y1="460" x2="880" y2="460" stroke="#888" stroke-width="1" />
+<text x="450" y="478" text-anchor="middle" font-size="11" fill="#666" font-weight="normal">Floor  (Y = 0)</text>
+<rect x="38" y="172.0" width="84" height="288.0" fill="#4fc3f7" stroke="#fff" stroke-width="1.5" rx="4" opacity="0.88"/>
+<line x1="32" y1="188.0" x2="128" y2="188.0" stroke="#ffe082" stroke-width="1" stroke-dasharray="5 3"/>
+<text x="80" y="308.0" text-anchor="middle" font-size="11" fill="#0d1b2a" font-weight="bold">PES</text>
+<text x="80" y="324.0" text-anchor="middle" font-size="11" fill="#0d1b2a" font-weight="bold">Player</text>
+<text x="80" y="164.0" text-anchor="middle" font-size="11" fill="#ccc" font-weight="normal">1.80m</text>
+<rect x="158" y="204.0" width="84" height="256.0" fill="#ef5350" stroke="#fff" stroke-width="1.5" rx="4" opacity="0.88"/>
+<line x1="152" y1="287.2" x2="248" y2="287.2" stroke="#ffe082" stroke-width="1" stroke-dasharray="5 3"/>
+<text x="200" y="324.0" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">PES</text>
+<text x="200" y="340.0" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">Enemy</text>
+<text x="200" y="196.0" text-anchor="middle" font-size="11" fill="#ccc" font-weight="normal">1.60m</text>
+<rect x="278" y="164.0" width="84" height="296.0" fill="#66bb6a" stroke="#fff" stroke-width="1.5" rx="4" opacity="0.88"/>
+<line x1="272" y1="188.0" x2="368" y2="188.0" stroke="#ffe082" stroke-width="1" stroke-dasharray="5 3"/>
+<text x="320" y="312.0" text-anchor="middle" font-size="11" fill="#0d1b2a" font-weight="bold">Tarkov</text>
+<text x="320" y="156.0" text-anchor="middle" font-size="11" fill="#ccc" font-weight="normal">1.85m</text>
+<rect x="398" y="156.0" width="84" height="304.0" fill="#ffa726" stroke="#fff" stroke-width="1.5" rx="4" opacity="0.88"/>
+<line x1="392" y1="180.0" x2="488" y2="180.0" stroke="#ffe082" stroke-width="1" stroke-dasharray="5 3"/>
+<text x="440" y="308.0" text-anchor="middle" font-size="11" fill="#0d1b2a" font-weight="bold">Hunt</text>
+<text x="440" y="148.0" text-anchor="middle" font-size="11" fill="#ccc" font-weight="normal">1.90m</text>
+<rect x="518" y="178.39999999999998" width="84" height="281.6" fill="#ab47bc" stroke="#fff" stroke-width="1.5" rx="4" opacity="0.88"/>
+<line x1="512" y1="216.8" x2="608" y2="216.8" stroke="#ffe082" stroke-width="1" stroke-dasharray="5 3"/>
+<text x="560" y="311.2" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">Valorant</text>
+<text x="560" y="327.2" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">(UE)</text>
+<text x="560" y="170.39999999999998" text-anchor="middle" font-size="11" fill="#ccc" font-weight="normal">1.76m</text>
+<rect x="638" y="167.2" width="84" height="292.8" fill="#26c6da" stroke="#fff" stroke-width="1.5" rx="4" opacity="0.88"/>
+<line x1="632" y1="199.20000000000005" x2="728" y2="199.20000000000005" stroke="#ffe082" stroke-width="1" stroke-dasharray="5 3"/>
+<text x="680" y="305.6" text-anchor="middle" font-size="11" fill="#0d1b2a" font-weight="bold">CS2</text>
+<text x="680" y="321.6" text-anchor="middle" font-size="11" fill="#0d1b2a" font-weight="bold">(Source)</text>
+<text x="680" y="159.2" text-anchor="middle" font-size="11" fill="#ccc" font-weight="normal">1.83m</text>
+<line x1="740" y1="80" x2="780" y2="80" stroke="#ffe082" stroke-width="1" stroke-dasharray="5 3"/>
+<text x="785" y="84" text-anchor="start" font-size="11" fill="#ffe082" font-weight="normal">Eye height</text>
+</svg>
