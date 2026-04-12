@@ -1,5 +1,6 @@
-[gd_scene load_steps=17 format=3 uid="uid://walk_scene"]
+[gd_scene load_steps=18 format=3 uid="uid://walk_scene"]
 
+[ext_resource type="PackedScene" path="res://assets/washing_machine.glb" id="6_washer"]
 [ext_resource type="Script" path="res://scripts/walk_scene.gd" id="1_walk"]
 [ext_resource type="Script" path="res://scripts/player_controller.gd" id="2_player"]
 [ext_resource type="Script" path="res://scripts/microwave_portal.gd" id="3_portal"]
@@ -235,3 +236,9 @@ mouse_filter = 2
 ; ---- WALKTHROUGH UI ----
 [node name="WalkthroughUI" type="CanvasLayer" parent="."]
 script = ExtResource("5_ui")
+
+; ---- WASHING MACHINE ----
+[node name="WashingMachine" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, -5)
+
+[node name="WashingMachineModel" type="Node3D" parent="WashingMachine" instance=ExtResource("6_washer")]
