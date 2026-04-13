@@ -158,59 +158,38 @@ func _ready() -> void:
 	_build_gun()
 
 # ─────────────────────────────────────────────
-# 枪械构建（程序化）
+# 枪械构建（加载 GLB 资产）
 # ─────────────────────────────────────────────
 func _build_gun() -> void:
 	gun_pivot = Node3D.new()
 	gun_pivot.name = "GunPivot"
-	gun_pivot.position = Vector3(0.22, -0.18, -0.45)
+	# 位置：右侧、偏下、靠近相机
+	gun_pivot.position = Vector3(0.18, -0.16, -0.35)
 	camera.add_child(gun_pivot)
 	bob_origin = gun_pivot.position
 
-	# Body
-	var body := MeshInstance3D.new()
-	var body_mesh := BoxMesh.new()
-	body_mesh.size = Vector3(0.06, 0.1, 0.32)
-	body.mesh = body_mesh
-	body.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.15, 0.15, 0.15)))
-	gun_pivot.add_child(body)
+	# 尝试加载 GLB 模型
+	var pistol_scene: PackedScene = load("res://assets/pistol.glb")
+	if pistol_scene:
+		var pistol_instance: Node3D = pistol_scene.instantiate()
+		pistol_instance.name = "PistolModel"
+		# 缩放到合适的 FPS 视角大小
+		pistol_instance.scale = Vector3(0.012, 0.012, 0.012)
+		# 旋转使枪口朝前（-Z 方向）
+		pistol_instance.rotation_degrees = Vector3(0, 180, 0)
+		gun_pivot.add_child(pistol_instance)
+		gun_mesh = pistol_instance.find_child("*", true, false) as MeshInstance3D
+	else:
+		# Fallback：程序化枪械（防止资产加载失败时游戏崩溃）
+		var body := MeshInstance3D.new()
+		var body_mesh := BoxMesh.new()
+		body_mesh.size = Vector3(0.06, 0.1, 0.32)
+		body.mesh = body_mesh
+		body.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.15, 0.15, 0.15)))
+		gun_pivot.add_child(body)
+		gun_mesh = body
 
-	# Barrel
-	var barrel := MeshInstance3D.new()
-	var barrel_mesh := CylinderMesh.new()
-	barrel_mesh.top_radius = 0.018
-	barrel_mesh.bottom_radius = 0.018
-	barrel_mesh.height = 0.22
-	barrel.mesh = barrel_mesh
-	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.2, 0.2, 0.2)))
-	barrel.rotation_degrees = Vector3(90, 0, 0)
-	barrel.position = Vector3(0.0, 0.02, -0.27)
-	gun_pivot.add_child(barrel)
-
-	# Grip
-	var grip := MeshInstance3D.new()
-	var grip_mesh := BoxMesh.new()
-	grip_mesh.size = Vector3(0.055, 0.12, 0.075)
-	grip.mesh = grip_mesh
-	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.25, 0.15, 0.08)))
-	grip.rotation_degrees = Vector3(15, 0, 0)
-	grip.position = Vector3(0.0, -0.11, 0.08)
-	gun_pivot.add_child(grip)
-
-	# Trigger Guard
-	var tg := MeshInstance3D.new()
-	var tg_mesh := TorusMesh.new()
-	tg_mesh.inner_radius = 0.012
-	tg_mesh.outer_radius = 0.03
-	tg_mesh.rings = 8
-	tg_mesh.ring_segments = 6
-	tg.mesh = tg_mesh
-	tg.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.15, 0.15, 0.15)))
-	tg.rotation_degrees = Vector3(0, 90, 0)
-	tg.position = Vector3(0.0, -0.06, 0.03)
-	gun_pivot.add_child(tg)
-
-	# Left Arm
+	# 手臂（保持程序化，与任何枪械通用）
 	var arm_l := MeshInstance3D.new()
 	var arm_mesh_l := CapsuleMesh.new()
 	arm_mesh_l.radius = 0.04
@@ -221,7 +200,6 @@ func _build_gun() -> void:
 	arm_l.position = Vector3(-0.14, -0.13, 0.05)
 	camera.add_child(arm_l)
 
-	# Right Arm
 	var arm_r := MeshInstance3D.new()
 	var arm_mesh_r := CapsuleMesh.new()
 	arm_mesh_r.radius = 0.04
@@ -231,8 +209,6 @@ func _build_gun() -> void:
 	arm_r.rotation_degrees = Vector3(70, -10, -10)
 	arm_r.position = Vector3(0.22, -0.13, 0.05)
 	camera.add_child(arm_r)
-
-	gun_mesh = body
 
 # ─────────────────────────────────────────────
 # 输入（鼠标视角）
