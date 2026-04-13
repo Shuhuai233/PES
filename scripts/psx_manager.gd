@@ -60,10 +60,10 @@ const PSX_SHADER_PATH := "res://shaders/psx_surface.gdshader"
 @export var fog_color: Color = Color(0.06, 0.04, 0.1, 1.0)
 
 ## 雾开始的距离（米）— 越小越近处就开始起雾。
-@export_range(0.0, 50.0, 0.5) var fog_start: float = 3.0
+@export_range(0.0, 50.0, 0.5) var fog_start: float = 6.0
 
 ## 雾完全不透明的距离 — 越小可视距离越短。
-@export_range(1.0, 80.0, 0.5) var fog_end: float = 28.0
+@export_range(1.0, 80.0, 0.5) var fog_end: float = 40.0
 
 # ══════════════════════════════════════════════════════════════════════════════
 # POST-PROCESS SHADER PARAMETERS
@@ -108,10 +108,10 @@ const PSX_SHADER_PATH := "res://shaders/psx_surface.gdshader"
 @export_group("Post-Process Levels")
 
 ## 对比度 — >1 压暗阴影、提亮高光，增强明暗反差。
-@export_range(0.5, 2.0, 0.01) var pp_contrast: float = 1.25
+@export_range(0.5, 2.0, 0.01) var pp_contrast: float = 1.15
 
 ## 整体亮度偏移 — 负值稍微压暗整个画面。
-@export_range(-0.3, 0.3, 0.01) var pp_brightness: float = -0.04
+@export_range(-0.3, 0.3, 0.01) var pp_brightness: float = 0.03
 
 ## 饱和度 — <1 去饱和，模拟 PS1 CRT 的灰暗色彩。
 @export_range(0.0, 1.5, 0.01) var pp_saturation: float = 0.7
