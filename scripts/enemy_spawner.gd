@@ -20,11 +20,12 @@ const COLOR_VARIANTS: Array[Color] = [
 	Color(0.15, 0.5, 0.15),  # green heavy
 ]
 
-## Per-variant stat tweaks: [speed, health, accuracy, burst_count, shoot_damage]
+## Per-variant stat tweaks + archetype + grenade
+## archetype: 0=Rusher, 1=Standard, 2=Heavy
 const VARIANT_STATS := [
-	{ "speed": 3.0, "health": 80,  "accuracy": 0.80, "burst": 3, "damage": 8  },  # red — fast, fragile
-	{ "speed": 2.5, "health": 100, "accuracy": 0.85, "burst": 2, "damage": 10 },  # blue — balanced
-	{ "speed": 2.0, "health": 150, "accuracy": 0.75, "burst": 4, "damage": 6  },  # green — tanky, spray
+	{ "speed": 4.0, "sprint": 6.0, "health": 60,  "accuracy": 0.70, "burst": 2, "damage": 10, "archetype": 0, "grenade": false },  # red — Rusher
+	{ "speed": 2.5, "sprint": 5.0, "health": 100, "accuracy": 0.85, "burst": 3, "damage": 8,  "archetype": 1, "grenade": true  },  # blue — Standard
+	{ "speed": 2.0, "sprint": 3.5, "health": 150, "accuracy": 0.75, "burst": 5, "damage": 6,  "archetype": 2, "grenade": false },  # green — Heavy
 ]
 
 # ─────────────────────────────────────────────
@@ -117,10 +118,13 @@ func _build_enemy() -> CharacterBody3D:
 
 	# Apply variant stats to the enemy script properties
 	root.set("speed", stats["speed"])
+	root.set("sprint_speed", stats["sprint"])
 	root.set("max_health", stats["health"])
 	root.set("accuracy", stats["accuracy"])
 	root.set("burst_count", stats["burst"])
 	root.set("shoot_damage", stats["damage"])
+	root.set("archetype", stats["archetype"])
+	root.set("has_grenade", stats["grenade"])
 
 	# Torso (named MeshInstance3D so enemy.gd's @onready finds it)
 	root.add_child(_make_box("MeshInstance3D", Vector3(0.55, 0.65, 0.28), c, Vector3(0, 0.55, 0)))

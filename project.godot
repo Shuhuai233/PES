@@ -20,6 +20,7 @@ SessionManager="*res://scripts/session_manager.gd"
 PSXManager="*res://scripts/psx_manager.gd"
 Inventory="*res://scripts/inventory.gd"
 StashManager="*res://scripts/stash_manager.gd"
+SquadManager="*res://scripts/squad_manager.gd"
 
 [input]
 

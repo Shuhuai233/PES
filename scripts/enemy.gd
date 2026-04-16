@@ -1,13 +1,16 @@
 extends CharacterBody3D
 
-## Enemy — Cover-based ranged AI with state machine.
+## Enemy — Cover-based ranged AI with NavigationAgent3D pathfinding.
+## Inspired by F.E.A.R. (GOAP-style emergent behavior) and
+## The Division (archetype-based role differentiation).
 ##
 ## States:
-##   SEEK_COVER  → run to nearest unoccupied cover
+##   SEEK_COVER  → navigate to best cover using NavMesh
 ##   IN_COVER    → crouch behind cover, wait before peeking
 ##   PEEK_SHOOT  → lean out and fire a burst at the player
-##   ADVANCE     → no cover / close range — rush & hip-fire
-##   RETREAT     → slide back behind cover after peeking
+##   ADVANCE     → rush player (Rusher archetype default behavior)
+##   RETREAT     → navigate back behind cover after peeking
+##   FLANK       → move to player's flank via NavMesh (coordinated)
 
 # ─────────────────────────────────────────────
 # Tuning knobs (set by spawner or Inspector)
@@ -20,25 +23,35 @@ extends CharacterBody3D
 @export_group("Ranged Combat")
 @export var shoot_damage: int = 8
 @export var shoot_range: float = 20.0
-@export var burst_count: int = 3           ## shots per peek
-@export var burst_interval: float = 0.25   ## seconds between shots in a burst
-@export var accuracy: float = 0.85         ## 0-1, higher = more accurate
-@export var bullet_speed: float = 40.0     ## visual tracer speed
+@export var burst_count: int = 3
+@export var burst_interval: float = 0.25
+@export var accuracy: float = 0.85
+@export var bullet_speed: float = 40.0
 
 @export_group("Cover Behaviour")
 @export var cover_search_radius: float = 14.0
-@export var min_cover_time: float = 1.2    ## minimum time hiding before peeking
-@export var max_cover_time: float = 3.0    ## maximum time hiding before peeking
-@export var peek_side_offset: float = 0.9  ## how far to lean sideways when peeking
-@export var peek_duration: float = 0.6     ## time spent exposed while aiming before burst
-@export var advance_range: float = 6.0     ## if closer than this, just rush
+@export var min_cover_time: float = 1.2
+@export var max_cover_time: float = 3.0
+@export var peek_side_offset: float = 0.9
+@export var peek_duration: float = 0.6
+@export var advance_range: float = 6.0
 @export var melee_range: float = 2.0
 @export var melee_damage: int = 15
+
+@export_group("Archetype")
+## 0 = Rusher (red), 1 = Standard (blue), 2 = Heavy (green)
+@export var archetype: int = 1
+
+@export_group("Grenade")
+@export var has_grenade: bool = false
+@export var grenade_cooldown_time: float = 12.0
+@export var grenade_damage: int = 25
+@export var grenade_radius: float = 4.0
 
 # ─────────────────────────────────────────────
 # State machine
 # ─────────────────────────────────────────────
-enum State { SEEK_COVER, IN_COVER, PEEK_SHOOT, ADVANCE, RETREAT }
+enum State { SEEK_COVER, IN_COVER, PEEK_SHOOT, ADVANCE, RETREAT, FLANK }
 var state: State = State.SEEK_COVER
 
 # ─────────────────────────────────────────────
@@ -48,26 +61,20 @@ var health: int = 0
 var is_dead: bool = false
 
 var _player: Node3D = null
-var _cover_point: Node3D = null        ## current cover we're using
-var _peek_dir: Vector3 = Vector3.RIGHT ## direction to lean when peeking
+var _cover_point: Node3D = null
+var _peek_dir: Vector3 = Vector3.RIGHT
 var _cover_timer: float = 0.0
 var _burst_remaining: int = 0
 var _burst_timer: float = 0.0
 var _peek_timer: float = 0.0
 var _melee_cooldown: float = 0.0
 var _advance_shoot_timer: float = 0.0
-var _no_cover_timer: float = 0.0       ## how long since we failed to find cover
-
-# ── Animation state ──
-var _walk_time: float = 0.0            ## accumulator for limb swing
-var _is_crouching_anim: bool = false   ## visual crouch state for cover
-var _crouch_blend: float = 0.0         ## 0 = standing, 1 = crouched
-var _visual_nodes: Array[Node3D] = []  ## cached visual child refs (excludes CollisionShape3D)
-const WALK_SWING_FREQ: float = 10.0    ## limb swing frequency
-const WALK_SWING_LEG: float = 0.45     ## leg swing amplitude (radians)
-const WALK_SWING_ARM: float = 0.3      ## arm swing amplitude (radians)
-const CROUCH_OFFSET_Y: float = -0.35   ## how far body lowers when crouching
-const SPAWN_SCALE_DURATION: float = 0.35
+var _no_cover_timer: float = 0.0
+var _grenade_cooldown: float = 0.0
+var _flank_target: Vector3 = Vector3.ZERO
+var _suppression_level: float = 0.0   ## 0-1, how suppressed this enemy is
+var _recent_damage_timer: float = 0.0 ## time since last damage taken
+var _nav_agent: NavigationAgent3D = null
 
 @onready var mesh: MeshInstance3D = $MeshInstance3D
 
@@ -82,19 +89,33 @@ func _ready() -> void:
 	add_to_group("enemies")
 	health = max_health
 	_player = get_tree().get_first_node_in_group("player")
-	state = State.SEEK_COVER
-	# Cache visual children (everything except CollisionShape3D)
-	for child in get_children():
-		if child is Node3D and not child is CollisionShape3D:
-			_visual_nodes.append(child)
-	# ── Spawn-in animation: scale visual children from zero ──
-	# (Do NOT scale the root CharacterBody3D — it breaks collision detection)
-	for vn in _visual_nodes:
-		vn.scale = Vector3.ZERO
-	var spawn_tw := create_tween().set_parallel(true)
-	spawn_tw.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	for vn in _visual_nodes:
-		spawn_tw.tween_property(vn, "scale", Vector3.ONE, SPAWN_SCALE_DURATION)
+
+	# Register with SquadManager
+	if Engine.has_singleton("SquadManager") or get_node_or_null("/root/SquadManager"):
+		var sm = get_node_or_null("/root/SquadManager")
+		if sm:
+			sm.register_enemy(self)
+
+	# Setup NavigationAgent3D
+	_nav_agent = NavigationAgent3D.new()
+	_nav_agent.path_desired_distance = 0.8
+	_nav_agent.target_desired_distance = 0.8
+	_nav_agent.avoidance_enabled = true
+	_nav_agent.radius = 0.4
+	_nav_agent.max_speed = sprint_speed
+	add_child(_nav_agent)
+
+	# Set initial state based on archetype
+	match archetype:
+		0:  # Rusher — skip cover, go straight to ADVANCE
+			state = State.ADVANCE
+		1:  # Standard — normal cover behavior
+			state = State.SEEK_COVER
+		2:  # Heavy — seek cover, stay longer
+			state = State.SEEK_COVER
+
+func get_state() -> State:
+	return state
 
 func _physics_process(delta: float) -> void:
 	if is_dead:
@@ -110,12 +131,18 @@ func _physics_process(delta: float) -> void:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		move_and_slide()
-		_animate_limbs(delta)
-		_animate_crouch(delta)
 		return
 
-	# Melee cooldown always ticks
+	# Report player position to squad
+	var sm = get_node_or_null("/root/SquadManager")
+	if sm:
+		sm.report_player_spotted(_player.global_position)
+
+	# Timers
 	_melee_cooldown = max(0.0, _melee_cooldown - delta)
+	_grenade_cooldown = max(0.0, _grenade_cooldown - delta)
+	_recent_damage_timer = max(0.0, _recent_damage_timer - delta)
+	_suppression_level = max(0.0, _suppression_level - delta * 0.3)
 
 	# State dispatch
 	match state:
@@ -129,16 +156,15 @@ func _physics_process(delta: float) -> void:
 			_state_advance(delta)
 		State.RETREAT:
 			_state_retreat(delta)
+		State.FLANK:
+			_state_flank(delta)
 
 	move_and_slide()
-	_animate_limbs(delta)
-	_animate_crouch(delta)
 
 # ═════════════════════════════════════════════
-# SEEK_COVER — find and run to the best cover
+# SEEK_COVER — navigate to best cover via NavMesh
 # ═════════════════════════════════════════════
 func _state_seek_cover(delta: float) -> void:
-	# If very close to player, just advance
 	var dist_to_player := _flat_dist_to(_player.global_position)
 	if dist_to_player < advance_range:
 		_transition(State.ADVANCE)
@@ -149,7 +175,6 @@ func _state_seek_cover(delta: float) -> void:
 		_cover_point = _find_best_cover()
 
 	if _cover_point == null:
-		# No cover found — advance instead
 		_no_cover_timer += delta
 		if _no_cover_timer > 1.5:
 			_transition(State.ADVANCE)
@@ -160,23 +185,25 @@ func _state_seek_cover(delta: float) -> void:
 		return
 
 	_no_cover_timer = 0.0
-	var cover_pos := _cover_point.global_position
-	var dist := _flat_dist_to(cover_pos)
 
-	if dist < 1.0:
-		# Arrived at cover
+	# Navigate to cover using NavAgent
+	_nav_agent.target_position = _cover_point.global_position
+	if _nav_agent.is_navigation_finished():
 		_claim_cover(_cover_point)
 		_transition(State.IN_COVER)
 		return
 
-	# Run to cover
-	var dir := _flat_dir_to(cover_pos)
+	# Follow NavMesh path
+	var next_pos := _nav_agent.get_next_path_position()
+	var dir := (next_pos - global_position)
+	dir.y = 0.0
+	dir = dir.normalized()
 	velocity.x = dir.x * sprint_speed
 	velocity.z = dir.z * sprint_speed
 	_look_at_player()
 
 # ═════════════════════════════════════════════
-# IN_COVER — hide and wait, then decide to peek
+# IN_COVER — hide and wait, then decide to peek or flank or grenade
 # ═════════════════════════════════════════════
 func _state_in_cover(delta: float) -> void:
 	velocity.x = move_toward(velocity.x, 0.0, speed * 4.0 * delta)
@@ -184,8 +211,25 @@ func _state_in_cover(delta: float) -> void:
 	_look_at_player()
 
 	_cover_timer -= delta
+
+	# Grenade check: if player is stationary behind cover
+	if has_grenade and _grenade_cooldown <= 0.0:
+		var sm = get_node_or_null("/root/SquadManager")
+		if sm and sm.should_throw_grenade():
+			_throw_grenade()
+			return
+
+	# Flank check: Standard archetype may flank after a few peeks
+	if archetype == 1 and _cover_timer <= 0.0 and randf() < 0.25:
+		var sm2 = get_node_or_null("/root/SquadManager")
+		if sm2:
+			var flank_dir := sm2.request_flank_direction(self, _player)
+			if flank_dir != Vector3.ZERO:
+				_flank_target = _player.global_position + flank_dir * 12.0
+				_transition(State.FLANK)
+				return
+
 	if _cover_timer <= 0.0:
-		# Time to peek!
 		_compute_peek_direction()
 		_peek_timer = peek_duration
 		_burst_remaining = burst_count
@@ -197,6 +241,11 @@ func _state_in_cover(delta: float) -> void:
 # ═════════════════════════════════════════════
 func _state_peek_shoot(delta: float) -> void:
 	_look_at_player()
+
+	# Report suppressing to squad
+	var sm = get_node_or_null("/root/SquadManager")
+	if sm:
+		sm.report_suppressing()
 
 	# Lean sideways from cover
 	if _cover_point and is_instance_valid(_cover_point):
@@ -210,44 +259,49 @@ func _state_peek_shoot(delta: float) -> void:
 			velocity.x = move_toward(velocity.x, 0.0, speed * 4.0 * delta)
 			velocity.z = move_toward(velocity.z, 0.0, speed * 4.0 * delta)
 
-	# Aim delay before first shot
+	# Aim delay
 	_peek_timer -= delta
 	if _peek_timer > 0.0:
 		return
 
-	# Fire burst
+	# Fire burst (accuracy reduced when suppressed)
 	_burst_timer -= delta
 	if _burst_timer <= 0.0 and _burst_remaining > 0:
 		_fire_at_player()
 		_burst_remaining -= 1
 		_burst_timer = burst_interval
 
-	# Burst finished → retreat
+	# Burst finished → retreat (Heavy doesn't retreat, keeps shooting)
 	if _burst_remaining <= 0:
-		_transition(State.RETREAT)
+		if archetype == 2:  # Heavy — reload and shoot again
+			_burst_remaining = burst_count
+			_burst_timer = 0.8  # longer delay between bursts
+		else:
+			_transition(State.RETREAT)
 
 # ═════════════════════════════════════════════
-# RETREAT — slide back behind cover
+# RETREAT — navigate back behind cover
 # ═════════════════════════════════════════════
 func _state_retreat(delta: float) -> void:
 	if _cover_point == null or not is_instance_valid(_cover_point):
 		_transition(State.SEEK_COVER)
 		return
 
-	var cover_pos := _cover_point.global_position
-	var dist := _flat_dist_to(cover_pos)
-
-	if dist < 0.8:
+	_nav_agent.target_position = _cover_point.global_position
+	if _nav_agent.is_navigation_finished():
 		_transition(State.IN_COVER)
 		return
 
-	var dir := _flat_dir_to(cover_pos)
+	var next_pos := _nav_agent.get_next_path_position()
+	var dir := (next_pos - global_position)
+	dir.y = 0.0
+	dir = dir.normalized()
 	velocity.x = dir.x * speed * 2.5
 	velocity.z = dir.z * speed * 2.5
 	_look_at_player()
 
 # ═════════════════════════════════════════════
-# ADVANCE — rush player, hip-fire occasionally
+# ADVANCE — rush player via NavMesh (Rusher default, fallback for all)
 # ═════════════════════════════════════════════
 func _state_advance(delta: float) -> void:
 	var dist := _flat_dist_to(_player.global_position)
@@ -260,24 +314,61 @@ func _state_advance(delta: float) -> void:
 		_look_at_player()
 		return
 
-	# Run toward player
-	var dir := _flat_dir_to(_player.global_position)
-	velocity.x = dir.x * speed
-	velocity.z = dir.z * speed
+	# Navigate to player via NavMesh
+	_nav_agent.target_position = _player.global_position
+	var next_pos := _nav_agent.get_next_path_position()
+	var dir := (next_pos - global_position)
+	dir.y = 0.0
+	dir = dir.normalized()
+
+	# Rushers sprint, others walk
+	var move_speed: float = sprint_speed if archetype == 0 else speed
+	velocity.x = dir.x * move_speed
+	velocity.z = dir.z * move_speed
 	_look_at_player()
 
-	# Occasional hip-fire while advancing
+	# Hip-fire while advancing
 	_advance_shoot_timer -= delta
 	if _advance_shoot_timer <= 0.0 and dist < shoot_range:
 		_fire_at_player()
 		_advance_shoot_timer = randf_range(0.8, 1.5)
 
-	# Try to find cover again if we're far enough
-	if dist > advance_range * 1.5:
+	# Non-rushers try to find cover if far enough away
+	if archetype != 0 and dist > advance_range * 1.5:
 		var cover := _find_best_cover()
 		if cover:
 			_cover_point = cover
 			_transition(State.SEEK_COVER)
+
+# ═════════════════════════════════════════════
+# FLANK — navigate to player's side via NavMesh
+# ═════════════════════════════════════════════
+func _state_flank(delta: float) -> void:
+	# Navigate to flank position
+	_nav_agent.target_position = _flank_target
+	var dist_to_target := _flat_dist_to(_flank_target)
+
+	if _nav_agent.is_navigation_finished() or dist_to_target < 2.0:
+		# Arrived at flank position — find cover nearby and engage
+		_cover_point = _find_best_cover()
+		if _cover_point:
+			_transition(State.SEEK_COVER)
+		else:
+			_transition(State.ADVANCE)
+		return
+
+	var next_pos := _nav_agent.get_next_path_position()
+	var dir := (next_pos - global_position)
+	dir.y = 0.0
+	dir = dir.normalized()
+	velocity.x = dir.x * sprint_speed
+	velocity.z = dir.z * sprint_speed
+	_look_at_player()
+
+	# Timeout: if flanking takes too long, just advance
+	_no_cover_timer += delta
+	if _no_cover_timer > 6.0:
+		_transition(State.ADVANCE)
 
 # ─────────────────────────────────────────────
 # Shooting
@@ -286,12 +377,12 @@ func _fire_at_player() -> void:
 	if _player == null or not is_instance_valid(_player):
 		return
 
-	# Muzzle position (from enemy head area)
 	var muzzle_pos := global_position + Vector3(0, 1.0, 0)
 	var target_pos := _player.global_position + Vector3(0, 0.6, 0)
 
-	# Apply inaccuracy
-	var spread := (1.0 - accuracy) * 2.0
+	# Accuracy reduced by suppression
+	var effective_accuracy := accuracy * (1.0 - _suppression_level * 0.4)
+	var spread := (1.0 - effective_accuracy) * 2.0
 	target_pos += Vector3(
 		randf_range(-spread, spread),
 		randf_range(-spread * 0.5, spread * 0.5),
@@ -300,27 +391,18 @@ func _fire_at_player() -> void:
 
 	var dir := (target_pos - muzzle_pos).normalized()
 
-	# Raycast to check line of sight
 	var space := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(muzzle_pos, muzzle_pos + dir * shoot_range)
 	query.exclude = [get_rid()]
-	query.collision_mask = 0b111  # layers 1,2,3 (floor, player, enemies)
+	query.collision_mask = 0b111
 
 	var result := space.intersect_ray(query)
 	if result and result.collider and result.collider.is_in_group("player"):
 		damaged_player.emit(shoot_damage)
 
-	# Visual tracer
 	_spawn_tracer(muzzle_pos, dir)
-
-	# Emit signal for audio/effects
 	shot_fired_at.emit(muzzle_pos, dir)
-
-	# Muzzle flash on enemy
 	_enemy_muzzle_flash()
-
-	# Gun recoil kick
-	_kick_enemy_gun()
 
 func _spawn_tracer(origin: Vector3, dir: Vector3) -> void:
 	var tracer := MeshInstance3D.new()
@@ -335,32 +417,77 @@ func _spawn_tracer(origin: Vector3, dir: Vector3) -> void:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.no_depth_test = true
 	tracer.set_surface_override_material(0, mat)
-
 	get_tree().current_scene.add_child(tracer)
 	tracer.global_position = origin
 	tracer.look_at(origin + dir, Vector3.UP)
-
-	# Fly forward and fade
 	var tween := tracer.create_tween()
 	tween.tween_property(tracer, "global_position", origin + dir * shoot_range, shoot_range / bullet_speed)
 	tween.parallel().tween_property(tracer, "transparency", 1.0, 0.3)
 	tween.tween_callback(tracer.queue_free)
 
 func _enemy_muzzle_flash() -> void:
-	# Brief light flash at gun position
 	var flash := OmniLight3D.new()
 	flash.light_color = Color(1.0, 0.7, 0.2)
 	flash.light_energy = 6.0
 	flash.omni_range = 3.0
 	flash.global_position = global_position + Vector3(0, 1.0, 0)
 	get_tree().current_scene.add_child(flash)
-
 	var tw := flash.create_tween()
 	tw.tween_property(flash, "light_energy", 0.0, 0.08)
 	tw.tween_callback(flash.queue_free)
 
 # ─────────────────────────────────────────────
-# Melee fallback
+# Grenade
+# ─────────────────────────────────────────────
+func _throw_grenade() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	_grenade_cooldown = grenade_cooldown_time
+
+	var target := _player.global_position
+	# Create grenade visual (simple sphere that arcs)
+	var grenade := MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.1
+	sphere.height = 0.2
+	grenade.mesh = sphere
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.2, 0.3, 0.1)
+	grenade.set_surface_override_material(0, mat)
+	get_tree().current_scene.add_child(grenade)
+	grenade.global_position = global_position + Vector3(0, 1.2, 0)
+
+	# Arc tween to target
+	var mid := (grenade.global_position + target) * 0.5 + Vector3(0, 3.0, 0)
+	var tween := grenade.create_tween()
+	tween.tween_property(grenade, "global_position", mid, 0.4).set_ease(Tween.EASE_OUT)
+	tween.tween_property(grenade, "global_position", target, 0.4).set_ease(Tween.EASE_IN)
+	tween.tween_callback(_grenade_explode.bind(target, grenade))
+
+func _grenade_explode(pos: Vector3, grenade_node: Node) -> void:
+	if is_instance_valid(grenade_node):
+		grenade_node.queue_free()
+
+	# Explosion flash
+	var flash := OmniLight3D.new()
+	flash.light_color = Color(1.0, 0.5, 0.1)
+	flash.light_energy = 12.0
+	flash.omni_range = grenade_radius * 2.0
+	flash.global_position = pos
+	get_tree().current_scene.add_child(flash)
+	var tw := flash.create_tween()
+	tw.tween_property(flash, "light_energy", 0.0, 0.4)
+	tw.tween_callback(flash.queue_free)
+
+	# Damage player if in radius
+	if _player and is_instance_valid(_player):
+		var dist := _player.global_position.distance_to(pos)
+		if dist < grenade_radius:
+			var falloff := 1.0 - (dist / grenade_radius)
+			damaged_player.emit(int(grenade_damage * falloff))
+
+# ─────────────────────────────────────────────
+# Melee
 # ─────────────────────────────────────────────
 func _try_melee() -> void:
 	if _melee_cooldown > 0.0:
@@ -369,7 +496,7 @@ func _try_melee() -> void:
 	damaged_player.emit(melee_damage)
 
 # ─────────────────────────────────────────────
-# Cover finding
+# Cover finding (enhanced with NavMesh reachability)
 # ─────────────────────────────────────────────
 func _find_best_cover() -> Node3D:
 	var covers := get_tree().get_nodes_in_group("cover_point")
@@ -384,7 +511,6 @@ func _find_best_cover() -> Node3D:
 	for cp: Node3D in covers:
 		if not is_instance_valid(cp):
 			continue
-		# Skip cover already claimed by another enemy
 		if cp.has_meta("claimed_by"):
 			var claimer = cp.get_meta("claimed_by")
 			if claimer != self and is_instance_valid(claimer) and not claimer.is_dead:
@@ -394,21 +520,29 @@ func _find_best_cover() -> Node3D:
 		var dist_to_me := my_pos.distance_to(cp_pos)
 		var dist_to_player := cp_pos.distance_to(player_pos)
 
-		# Skip if too far
 		if dist_to_me > cover_search_radius:
 			continue
 
-		# Score: prefer cover that is close to us, medium distance from player,
-		# and on the opposite side from the player (actually provides cover)
 		var score: float = 0.0
-		score -= dist_to_me * 1.5                          # closer to me = better
-		score += clamp(dist_to_player, 4.0, 12.0) * 0.5   # medium dist from player
-		# Bonus if cover is between us and player (blocks LOS)
+		score -= dist_to_me * 1.5
+		score += clamp(dist_to_player, 4.0, 12.0) * 0.5
+
+		# Cover blocks LOS from player
 		var cover_to_player := (player_pos - cp_pos).normalized()
 		var cover_to_me := (my_pos - cp_pos).normalized()
 		var dot := cover_to_player.dot(cover_to_me)
 		if dot < 0.0:
-			score += 5.0  # cover is between enemy and player
+			score += 5.0
+
+		# Flank bonus: cover on player's side
+		if _player:
+			var player_fwd := -_player.global_basis.z
+			player_fwd.y = 0.0
+			player_fwd = player_fwd.normalized()
+			var to_cover := (cp_pos - player_pos).normalized()
+			var flank_dot := player_fwd.dot(to_cover)
+			if abs(flank_dot) < 0.4:
+				score += 3.0  # side position bonus
 
 		if score > best_score:
 			best_score = score
@@ -417,13 +551,14 @@ func _find_best_cover() -> Node3D:
 	return best
 
 func _claim_cover(cover: Node3D) -> void:
-	# Release old cover
 	if _cover_point and is_instance_valid(_cover_point) and _cover_point.has_meta("claimed_by"):
 		if _cover_point.get_meta("claimed_by") == self:
 			_cover_point.remove_meta("claimed_by")
 	cover.set_meta("claimed_by", self)
 	_cover_point = cover
-	_cover_timer = randf_range(min_cover_time, max_cover_time)
+	# Heavy waits longer in cover
+	var time_mult := 1.5 if archetype == 2 else 1.0
+	_cover_timer = randf_range(min_cover_time, max_cover_time) * time_mult
 
 func _release_cover() -> void:
 	if _cover_point and is_instance_valid(_cover_point) and _cover_point.has_meta("claimed_by"):
@@ -434,11 +569,9 @@ func _compute_peek_direction() -> void:
 	if _player == null or _cover_point == null:
 		_peek_dir = Vector3.RIGHT
 		return
-	# Peek perpendicular to the cover→player line
 	var to_player := (_player.global_position - _cover_point.global_position)
 	to_player.y = 0.0
 	to_player = to_player.normalized()
-	# Choose left or right randomly
 	if randf() > 0.5:
 		_peek_dir = Vector3(-to_player.z, 0, to_player.x)
 	else:
@@ -448,33 +581,23 @@ func _compute_peek_direction() -> void:
 # State transitions
 # ─────────────────────────────────────────────
 func _transition(new_state: State) -> void:
-	# Exit current state
-	match state:
-		State.PEEK_SHOOT:
-			pass
-		State.IN_COVER:
-			pass
-
 	state = new_state
-
-	# Enter new state
 	match new_state:
 		State.SEEK_COVER:
 			_no_cover_timer = 0.0
-			_is_crouching_anim = false
 		State.IN_COVER:
-			_cover_timer = randf_range(min_cover_time, max_cover_time)
-			_is_crouching_anim = true
+			var time_mult := 1.5 if archetype == 2 else 1.0
+			_cover_timer = randf_range(min_cover_time, max_cover_time) * time_mult
 		State.PEEK_SHOOT:
 			_peek_timer = peek_duration
 			_burst_remaining = burst_count
 			_burst_timer = 0.0
-			_is_crouching_anim = false
 		State.ADVANCE:
 			_advance_shoot_timer = randf_range(0.3, 0.8)
-			_is_crouching_anim = false
 		State.RETREAT:
-			_is_crouching_anim = true
+			pass
+		State.FLANK:
+			_no_cover_timer = 0.0
 
 # ─────────────────────────────────────────────
 # Damage / Death
@@ -484,8 +607,10 @@ func take_damage(amount: int) -> void:
 		return
 	health -= amount
 	_flash_hit()
+	_recent_damage_timer = 2.0
+	_suppression_level = clamp(_suppression_level + 0.3, 0.0, 1.0)
 
-	# Taking damage while in cover → peek immediately to retaliate
+	# Taking damage while in cover → peek immediately
 	if state == State.IN_COVER:
 		_cover_timer = 0.0
 
@@ -507,74 +632,14 @@ func _flash_hit() -> void:
 func _die() -> void:
 	is_dead = true
 	_release_cover()
+	# Unregister from squad
+	var sm = get_node_or_null("/root/SquadManager")
+	if sm:
+		sm.unregister_enemy(self)
 	died.emit(self)
-	# Scale down visual children (not the root — it must stay for physics cleanup)
-	var tween := create_tween().set_parallel(true)
-	for vn in _visual_nodes:
-		if is_instance_valid(vn):
-			tween.tween_property(vn, "scale", Vector3.ZERO, 0.25)
-	tween.set_parallel(false)
+	var tween := create_tween()
+	tween.tween_property(self, "scale", Vector3.ZERO, 0.25)
 	tween.tween_callback(queue_free)
-
-# ─────────────────────────────────────────────
-# Procedural Animation
-# ─────────────────────────────────────────────
-func _animate_limbs(delta: float) -> void:
-	var leg_l := get_node_or_null("LegL") as Node3D
-	var leg_r := get_node_or_null("LegR") as Node3D
-	var arm_l := get_node_or_null("ArmL") as Node3D
-	var arm_r := get_node_or_null("ArmR") as Node3D
-	if leg_l == null:
-		return
-
-	var hvel := Vector2(velocity.x, velocity.z).length()
-	if hvel > 0.5:
-		_walk_time += delta * WALK_SWING_FREQ
-		var swing := sin(_walk_time)
-		# Legs swing forward/back (X axis) — they have no initial rotation
-		leg_l.rotation.x = swing * WALK_SWING_LEG
-		leg_r.rotation.x = -swing * WALK_SWING_LEG
-		# Arms swing opposite to legs — preserve their resting Z rotation
-		if arm_l:
-			arm_l.rotation.x = -swing * WALK_SWING_ARM
-		if arm_r:
-			arm_r.rotation.x = swing * WALK_SWING_ARM
-	else:
-		# Idle: lerp X rotation back to 0 (resting pose)
-		_walk_time = 0.0
-		leg_l.rotation.x = lerp(leg_l.rotation.x, 0.0, delta * 8.0)
-		leg_r.rotation.x = lerp(leg_r.rotation.x, 0.0, delta * 8.0)
-		if arm_l:
-			arm_l.rotation.x = lerp(arm_l.rotation.x, 0.0, delta * 8.0)
-		if arm_r:
-			arm_r.rotation.x = lerp(arm_r.rotation.x, 0.0, delta * 8.0)
-
-func _animate_crouch(delta: float) -> void:
-	var target := 1.0 if _is_crouching_anim else 0.0
-	_crouch_blend = lerp(_crouch_blend, target, delta * 6.0)
-	# Offset all visual meshes (torso, head, helmet, arms, gun) downward
-	for child_name in ["MeshInstance3D", "Head", "Helmet", "ArmL", "ArmR", "GunPivot"]:
-		var node := get_node_or_null(child_name) as Node3D
-		if node:
-			# We only modify the Y offset additively via a meta-stored base position
-			if not node.has_meta("_base_y"):
-				node.set_meta("_base_y", node.position.y)
-			var base_y: float = node.get_meta("_base_y")
-			node.position.y = base_y + CROUCH_OFFSET_Y * _crouch_blend
-
-func _kick_enemy_gun() -> void:
-	var gun_pivot := get_node_or_null("GunPivot") as Node3D
-	if gun_pivot == null:
-		return
-	# Use base position if stored by crouch anim, else current
-	var base_pos: Vector3 = gun_pivot.position
-	if gun_pivot.has_meta("_base_y"):
-		base_pos.y = gun_pivot.get_meta("_base_y") + CROUCH_OFFSET_Y * _crouch_blend
-	var tw := gun_pivot.create_tween()
-	tw.tween_property(gun_pivot, "position", base_pos + Vector3(0, 0.02, 0.04), 0.04)
-	tw.parallel().tween_property(gun_pivot, "rotation_degrees", Vector3(-8.0, 0, 0), 0.04)
-	tw.tween_property(gun_pivot, "position", base_pos, 0.1)
-	tw.parallel().tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.1)
 
 # ─────────────────────────────────────────────
 # Helpers

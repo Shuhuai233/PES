@@ -14,6 +14,7 @@ const ItemDataRes := preload("res://scripts/item_data.gd")
 var loot_spawner_node: Node3D = null
 var inventory_ui_node: CanvasLayer = null
 var cover_spawner_node: Node3D = null
+var nav_region: NavigationRegion3D = null
 
 var player_health: int = 100
 var max_health: int = 100
@@ -60,12 +61,43 @@ func _setup_inventory_ui() -> void:
 	add_child(inventory_ui_node)
 
 func _setup_cover() -> void:
+	# Create NavigationRegion3D for AI pathfinding
+	nav_region = NavigationRegion3D.new()
+	nav_region.name = "NavigationRegion3D"
+	add_child(nav_region)
+
 	cover_spawner_node = Node3D.new()
 	cover_spawner_node.name = "CoverSpawner"
 	cover_spawner_node.set_script(load("res://scripts/cover_spawner.gd"))
 	add_child(cover_spawner_node)
-	# Defer cover spawn so all nodes are in the tree first
+	# Defer cover spawn so all nodes are in the tree first, then bake NavMesh
 	cover_spawner_node.call_deferred("spawn_cover")
+	call_deferred("_bake_navmesh")
+
+func _bake_navmesh() -> void:
+	# Wait one frame for cover to be fully placed
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var nav_mesh := NavigationMesh.new()
+	# Arena is 80x80, flat floor at y=0
+	nav_mesh.agent_radius = 0.4
+	nav_mesh.agent_height = 1.8
+	nav_mesh.agent_max_climb = 0.3
+	nav_mesh.agent_max_slope = 45.0
+	nav_mesh.cell_size = 0.25
+	nav_mesh.cell_height = 0.2
+	# Filter settings for indoor arena
+	nav_mesh.filter_low_hanging_obstacles = true
+	nav_mesh.filter_ledge_spans = true
+	nav_mesh.filter_walkable_low_height_spans = true
+	# Parse geometry from static bodies (floor + walls + cover)
+	nav_mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	nav_mesh.geometry_source_geometry_mode = NavigationMesh.SOURCE_GEOMETRY_ROOT_NODE_CHILDREN
+
+	nav_region.navigation_mesh = nav_mesh
+	nav_region.bake_navigation_mesh()
+	print("[NavMesh] Baked navigation mesh for arena")
 
 func _setup_flicker() -> void:
 	var lights_root := get_node_or_null("FluorescentLights")
