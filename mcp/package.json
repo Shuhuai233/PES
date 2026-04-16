@@ -1,0 +1,16 @@
+{
+  "name": "pes-mcp",
+  "version": "1.0.0",
+  "description": "Project-specific MCP server for the PES Godot FPS game",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  }
+}

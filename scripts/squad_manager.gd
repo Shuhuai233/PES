@@ -110,7 +110,9 @@ func request_flank_direction(enemy: Node, player: Node3D) -> Vector3:
 	var perp_right := Vector3(player_fwd.z, 0, -player_fwd.x)
 
 	# Pick the side that's closer to this enemy
-	var enemy_dir := (enemy.global_position - player.global_position).normalized()
+	var enemy_pos: Vector3 = enemy.global_position
+	var player_pos: Vector3 = player.global_position
+	var enemy_dir: Vector3 = (enemy_pos - player_pos).normalized()
 	if enemy_dir.dot(perp_left) > enemy_dir.dot(perp_right):
 		return perp_left
 	else:

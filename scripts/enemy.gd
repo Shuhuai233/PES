@@ -75,6 +75,7 @@ var _flank_target: Vector3 = Vector3.ZERO
 var _suppression_level: float = 0.0   ## 0-1, how suppressed this enemy is
 var _recent_damage_timer: float = 0.0 ## time since last damage taken
 var _nav_agent: NavigationAgent3D = null
+var _debug_label: Label3D = null
 
 @onready var mesh: MeshInstance3D = $MeshInstance3D
 
@@ -113,6 +114,19 @@ func _ready() -> void:
 			state = State.SEEK_COVER
 		2:  # Heavy — seek cover, stay longer
 			state = State.SEEK_COVER
+
+	# Debug label (toggle with F3 in walk_scene)
+	_debug_label = Label3D.new()
+	_debug_label.name = "DebugLabel"
+	_debug_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_debug_label.font_size = 32
+	_debug_label.position = Vector3(0, 2.0, 0)
+	_debug_label.no_depth_test = true
+	_debug_label.visible = false  # off by default, F3 toggles
+	add_child(_debug_label)
+
+	var archetype_names := ["RUSHER", "STANDARD", "HEAVY"]
+	print("[Enemy] Spawned %s (HP:%d)" % [archetype_names[archetype], max_health])
 
 func get_state() -> State:
 	return state
@@ -160,6 +174,7 @@ func _physics_process(delta: float) -> void:
 			_state_flank(delta)
 
 	move_and_slide()
+	_update_debug_label()
 
 # ═════════════════════════════════════════════
 # SEEK_COVER — navigate to best cover via NavMesh
@@ -223,7 +238,7 @@ func _state_in_cover(delta: float) -> void:
 	if archetype == 1 and _cover_timer <= 0.0 and randf() < 0.25:
 		var sm2 = get_node_or_null("/root/SquadManager")
 		if sm2:
-			var flank_dir := sm2.request_flank_direction(self, _player)
+			var flank_dir: Vector3 = sm2.request_flank_direction(self, _player)
 			if flank_dir != Vector3.ZERO:
 				_flank_target = _player.global_position + flank_dir * 12.0
 				_transition(State.FLANK)
@@ -581,6 +596,9 @@ func _compute_peek_direction() -> void:
 # State transitions
 # ─────────────────────────────────────────────
 func _transition(new_state: State) -> void:
+	var old_name: String = State.keys()[state]
+	var new_name: String = State.keys()[new_state]
+	print("[Enemy:%s] %s -> %s" % [name, old_name, new_name])
 	state = new_state
 	match new_state:
 		State.SEEK_COVER:
@@ -660,3 +678,28 @@ func _look_at_player() -> void:
 	var look_target := Vector3(_player.global_position.x, global_position.y, _player.global_position.z)
 	if global_position.distance_squared_to(look_target) > 0.001:
 		look_at(look_target, Vector3.UP)
+
+# ─────────────────────────────────────────────
+# Debug visualization
+# ─────────────────────────────────────────────
+const ARCHETYPE_NAMES := ["RUSH", "STD", "HEAVY"]
+const STATE_COLORS := {
+	"SEEK_COVER": Color.YELLOW,
+	"IN_COVER": Color.GREEN,
+	"PEEK_SHOOT": Color.ORANGE,
+	"ADVANCE": Color.RED,
+	"RETREAT": Color.CYAN,
+	"FLANK": Color.MAGENTA,
+}
+
+func _update_debug_label() -> void:
+	if _debug_label == null or not _debug_label.visible:
+		return
+	var state_name: String = State.keys()[state]
+	var arch_name: String = ARCHETYPE_NAMES[archetype]
+	_debug_label.text = "%s [%s]\nHP:%d SUP:%.1f" % [state_name, arch_name, health, _suppression_level]
+	_debug_label.modulate = STATE_COLORS.get(state_name, Color.WHITE)
+
+func set_debug_visible(visible: bool) -> void:
+	if _debug_label:
+		_debug_label.visible = visible

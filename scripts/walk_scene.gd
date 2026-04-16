@@ -20,6 +20,7 @@ var player_health: int = 100
 var max_health: int = 100
 var in_stage: bool = false
 var session_id: String = ""
+var _debug_ai: bool = false
 
 # ── Fluorescent light flicker state ──
 var _flicker_lights: Array[OmniLight3D] = []
@@ -75,9 +76,12 @@ func _setup_cover() -> void:
 	call_deferred("_bake_navmesh")
 
 func _bake_navmesh() -> void:
-	# Wait one frame for cover to be fully placed
+	# Wait a few frames for cover to be fully placed
 	await get_tree().process_frame
 	await get_tree().process_frame
+	await get_tree().process_frame
+
+	print("[NavMesh] Starting bake... (cover nodes: %d)" % get_tree().get_nodes_in_group("cover_point").size())
 
 	var nav_mesh := NavigationMesh.new()
 	# Arena is 80x80, flat floor at y=0
@@ -86,18 +90,30 @@ func _bake_navmesh() -> void:
 	nav_mesh.agent_max_climb = 0.3
 	nav_mesh.agent_max_slope = 45.0
 	nav_mesh.cell_size = 0.25
-	nav_mesh.cell_height = 0.2
+	nav_mesh.cell_height = 0.25
 	# Filter settings for indoor arena
 	nav_mesh.filter_low_hanging_obstacles = true
 	nav_mesh.filter_ledge_spans = true
 	nav_mesh.filter_walkable_low_height_spans = true
-	# Parse geometry from static bodies (floor + walls + cover)
+	# Parse geometry from ALL static colliders in the scene
 	nav_mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
 	nav_mesh.geometry_source_geometry_mode = NavigationMesh.SOURCE_GEOMETRY_ROOT_NODE_CHILDREN
 
 	nav_region.navigation_mesh = nav_mesh
-	nav_region.bake_navigation_mesh()
-	print("[NavMesh] Baked navigation mesh for arena")
+
+	# Collect source geometry from the entire scene tree (self = WalkScene root)
+	var source_geo := NavigationMeshSourceGeometryData3D.new()
+	NavigationServer3D.parse_source_geometry_data(nav_mesh, source_geo, self)
+	print("[NavMesh] Source geometry parsed, baking...")
+	NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source_geo)
+	nav_region.navigation_mesh = nav_mesh
+
+	# Verify
+	var poly_count := nav_mesh.get_polygon_count()
+	var vert_count := nav_mesh.get_vertices().size()
+	print("[NavMesh] Bake complete — polygons: %d, vertices: %d" % [poly_count, vert_count])
+	if poly_count == 0:
+		push_warning("[NavMesh] WARNING: NavMesh has 0 polygons! AI pathfinding won't work.")
 
 func _setup_flicker() -> void:
 	var lights_root := get_node_or_null("FluorescentLights")
@@ -189,6 +205,21 @@ func _connect_signals() -> void:
 	if inventory_ui_node:
 		inventory_ui_node.ui_opened.connect(func(): player.inventory_open = true)
 		inventory_ui_node.ui_closed.connect(func(): player.inventory_open = false)
+
+# ─────────────────────────────────────────────
+# Debug (F3 = toggle AI debug labels)
+# ─────────────────────────────────────────────
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_F3:
+		_debug_ai = not _debug_ai
+		var label := "ON" if _debug_ai else "OFF"
+		print("[Debug] AI debug overlay: %s" % label)
+		# Toggle NavigationServer debug
+		NavigationServer3D.set_debug_enabled(_debug_ai)
+		# Toggle enemy labels
+		for enemy in get_tree().get_nodes_in_group("enemies"):
+			if enemy.has_method("set_debug_visible"):
+				enemy.set_debug_visible(_debug_ai)
 
 # ─────────────────────────────────────────────
 # Process
