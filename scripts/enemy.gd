@@ -62,11 +62,12 @@ var _no_cover_timer: float = 0.0       ## how long since we failed to find cover
 var _walk_time: float = 0.0            ## accumulator for limb swing
 var _is_crouching_anim: bool = false   ## visual crouch state for cover
 var _crouch_blend: float = 0.0         ## 0 = standing, 1 = crouched
+var _visual_nodes: Array[Node3D] = []  ## cached visual child refs (excludes CollisionShape3D)
 const WALK_SWING_FREQ: float = 10.0    ## limb swing frequency
 const WALK_SWING_LEG: float = 0.45     ## leg swing amplitude (radians)
 const WALK_SWING_ARM: float = 0.3      ## arm swing amplitude (radians)
 const CROUCH_OFFSET_Y: float = -0.35   ## how far body lowers when crouching
-const SPAWN_SCALE_DURATION: float = 0.3
+const SPAWN_SCALE_DURATION: float = 0.35
 
 @onready var mesh: MeshInstance3D = $MeshInstance3D
 
@@ -82,11 +83,18 @@ func _ready() -> void:
 	health = max_health
 	_player = get_tree().get_first_node_in_group("player")
 	state = State.SEEK_COVER
-	# ── Spawn-in animation: scale from zero ──
-	scale = Vector3.ZERO
-	var spawn_tw := create_tween()
+	# Cache visual children (everything except CollisionShape3D)
+	for child in get_children():
+		if child is Node3D and not child is CollisionShape3D:
+			_visual_nodes.append(child)
+	# ── Spawn-in animation: scale visual children from zero ──
+	# (Do NOT scale the root CharacterBody3D — it breaks collision detection)
+	for vn in _visual_nodes:
+		vn.scale = Vector3.ZERO
+	var spawn_tw := create_tween().set_parallel(true)
 	spawn_tw.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	spawn_tw.tween_property(self, "scale", Vector3.ONE, SPAWN_SCALE_DURATION)
+	for vn in _visual_nodes:
+		spawn_tw.tween_property(vn, "scale", Vector3.ONE, SPAWN_SCALE_DURATION)
 
 func _physics_process(delta: float) -> void:
 	if is_dead:
@@ -500,18 +508,22 @@ func _die() -> void:
 	is_dead = true
 	_release_cover()
 	died.emit(self)
-	var tween := create_tween()
-	tween.tween_property(self, "scale", Vector3.ZERO, 0.25)
+	# Scale down visual children (not the root — it must stay for physics cleanup)
+	var tween := create_tween().set_parallel(true)
+	for vn in _visual_nodes:
+		if is_instance_valid(vn):
+			tween.tween_property(vn, "scale", Vector3.ZERO, 0.25)
+	tween.set_parallel(false)
 	tween.tween_callback(queue_free)
 
 # ─────────────────────────────────────────────
 # Procedural Animation
 # ─────────────────────────────────────────────
 func _animate_limbs(delta: float) -> void:
-	var leg_l := get_node_or_null("LegL") as MeshInstance3D
-	var leg_r := get_node_or_null("LegR") as MeshInstance3D
-	var arm_l := get_node_or_null("ArmL") as MeshInstance3D
-	var arm_r := get_node_or_null("ArmR") as MeshInstance3D
+	var leg_l := get_node_or_null("LegL") as Node3D
+	var leg_r := get_node_or_null("LegR") as Node3D
+	var arm_l := get_node_or_null("ArmL") as Node3D
+	var arm_r := get_node_or_null("ArmR") as Node3D
 	if leg_l == null:
 		return
 
@@ -519,21 +531,19 @@ func _animate_limbs(delta: float) -> void:
 	if hvel > 0.5:
 		_walk_time += delta * WALK_SWING_FREQ
 		var swing := sin(_walk_time)
-		# Legs swing opposite to each other
+		# Legs swing forward/back (X axis) — they have no initial rotation
 		leg_l.rotation.x = swing * WALK_SWING_LEG
 		leg_r.rotation.x = -swing * WALK_SWING_LEG
-		# Arms counter-swing (opposite to legs)
+		# Arms swing opposite to legs — preserve their resting Z rotation
 		if arm_l:
 			arm_l.rotation.x = -swing * WALK_SWING_ARM
 		if arm_r:
 			arm_r.rotation.x = swing * WALK_SWING_ARM
 	else:
-		# Idle: lerp back to rest pose
+		# Idle: lerp X rotation back to 0 (resting pose)
 		_walk_time = 0.0
-		if leg_l:
-			leg_l.rotation.x = lerp(leg_l.rotation.x, 0.0, delta * 8.0)
-		if leg_r:
-			leg_r.rotation.x = lerp(leg_r.rotation.x, 0.0, delta * 8.0)
+		leg_l.rotation.x = lerp(leg_l.rotation.x, 0.0, delta * 8.0)
+		leg_r.rotation.x = lerp(leg_r.rotation.x, 0.0, delta * 8.0)
 		if arm_l:
 			arm_l.rotation.x = lerp(arm_l.rotation.x, 0.0, delta * 8.0)
 		if arm_r:
@@ -556,13 +566,15 @@ func _kick_enemy_gun() -> void:
 	var gun_pivot := get_node_or_null("GunPivot") as Node3D
 	if gun_pivot == null:
 		return
-	var orig_pos := gun_pivot.position
-	var orig_rot := gun_pivot.rotation_degrees
+	# Use base position if stored by crouch anim, else current
+	var base_pos: Vector3 = gun_pivot.position
+	if gun_pivot.has_meta("_base_y"):
+		base_pos.y = gun_pivot.get_meta("_base_y") + CROUCH_OFFSET_Y * _crouch_blend
 	var tw := gun_pivot.create_tween()
-	tw.tween_property(gun_pivot, "position", orig_pos + Vector3(0, 0.02, 0.04), 0.04)
-	tw.parallel().tween_property(gun_pivot, "rotation_degrees", orig_rot + Vector3(-8.0, 0, 0), 0.04)
-	tw.tween_property(gun_pivot, "position", orig_pos, 0.1)
-	tw.parallel().tween_property(gun_pivot, "rotation_degrees", orig_rot, 0.1)
+	tw.tween_property(gun_pivot, "position", base_pos + Vector3(0, 0.02, 0.04), 0.04)
+	tw.parallel().tween_property(gun_pivot, "rotation_degrees", Vector3(-8.0, 0, 0), 0.04)
+	tw.tween_property(gun_pivot, "position", base_pos, 0.1)
+	tw.parallel().tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.1)
 
 # ─────────────────────────────────────────────
 # Helpers

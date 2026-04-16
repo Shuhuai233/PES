@@ -34,6 +34,7 @@ func _ready() -> void:
 	_setup_inventory_ui()
 	_setup_cover()
 	_setup_flicker()
+	_setup_dust_particles()
 	_connect_signals()
 	spawner.deactivate()
 
@@ -93,6 +94,36 @@ func _tick_flicker(delta: float) -> void:
 		tw.tween_property(light, "light_energy", base_energy * randf_range(0.05, 0.3), 0.04)
 		tw.tween_property(light, "light_energy", base_energy * randf_range(0.6, 1.0), 0.04 + randf() * 0.06)
 	tw.tween_property(light, "light_energy", base_energy, 0.08)
+
+func _setup_dust_particles() -> void:
+	# Ambient floating dust — attaches to player so it follows them
+	var dust := GPUParticles3D.new()
+	dust.name = "AmbientDust"
+	dust.amount = 60
+	dust.lifetime = 8.0
+	dust.visibility_aabb = AABB(Vector3(-12, -1, -12), Vector3(24, 5, 24))
+	dust.emitting = true
+
+	var mat := ParticleProcessMaterial.new()
+	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	mat.emission_box_extents = Vector3(10, 1.5, 10)
+	mat.direction = Vector3(0, 0, 0)
+	mat.spread = 180.0
+	mat.initial_velocity_min = 0.02
+	mat.initial_velocity_max = 0.08
+	mat.gravity = Vector3(0, -0.01, 0)
+	mat.scale_min = 0.3
+	mat.scale_max = 0.8
+	mat.color = Color(0.9, 0.85, 0.7, 0.15)
+	dust.process_material = mat
+
+	# Tiny quad mesh for each particle
+	var draw_mesh := QuadMesh.new()
+	draw_mesh.size = Vector2(0.015, 0.015)
+	dust.draw_pass_1 = draw_mesh
+
+	player.add_child(dust)
+	dust.position = Vector3(0, 1.5, 0)
 
 func _connect_signals() -> void:
 	# Player signals
@@ -185,6 +216,8 @@ func _on_player_entered_portal() -> void:
 	# Spawn arena loot when stage activates
 	if loot_spawner_node:
 		loot_spawner_node.spawn_arena_loot()
+	# ── Portal entry FOV warp ──
+	_portal_fov_warp()
 
 func _on_extraction_started() -> void:
 	if ui.current_step == ui.TutorialStep.SHOOT_ENEMIES:
@@ -234,6 +267,18 @@ func _on_weapon_equipped(item: Resource) -> void:
 func _on_inventory_full() -> void:
 	# Could show HUD flash — for now just print
 	print("Backpack full!")
+
+# ─────────────────────────────────────────────
+# Portal FOV Warp
+# ─────────────────────────────────────────────
+func _portal_fov_warp() -> void:
+	var cam: Camera3D = player.camera
+	if cam == null:
+		return
+	var base_fov: float = player.base_fov
+	var tw := create_tween()
+	tw.tween_property(cam, "fov", base_fov + 25.0, 0.15).set_ease(Tween.EASE_IN)
+	tw.tween_property(cam, "fov", base_fov, 0.4).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_ELASTIC)
 
 # ─────────────────────────────────────────────
 # Damage / Death

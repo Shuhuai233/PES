@@ -170,7 +170,7 @@ func _build_gun() -> void:
 	gun_pivot = Node3D.new()
 	gun_pivot.name = "GunPivot"
 	# 位置：右侧、偏下、靠近相机
-	gun_pivot.position = Vector3(0.18, -0.16, -0.35)
+	gun_pivot.position = Vector3(0.25, -0.22, -0.45)
 	camera.add_child(gun_pivot)
 	bob_origin = gun_pivot.position
 
@@ -179,8 +179,8 @@ func _build_gun() -> void:
 	if pistol_scene:
 		var pistol_instance: Node3D = pistol_scene.instantiate()
 		pistol_instance.name = "PistolModel"
-		# 缩放到合适的 FPS 视角大小
-		pistol_instance.scale = Vector3(0.012, 0.012, 0.012)
+		# 缩放到合适的 FPS 视角大小（Tripo3D 模型原始尺寸较大，需适当缩放）
+		pistol_instance.scale = Vector3(0.08, 0.08, 0.08)
 		# 旋转使枪口朝前（-Z 方向）
 		pistol_instance.rotation_degrees = Vector3(0, 180, 0)
 		gun_pivot.add_child(pistol_instance)
@@ -203,7 +203,7 @@ func _build_gun() -> void:
 	arm_l.mesh = arm_mesh_l
 	arm_l.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.75, 0.55, 0.42)))
 	arm_l.rotation_degrees = Vector3(70, 10, 10)
-	arm_l.position = Vector3(-0.14, -0.13, 0.05)
+	arm_l.position = Vector3(0.05, -0.22, -0.1)
 	camera.add_child(arm_l)
 
 	var arm_r := MeshInstance3D.new()
@@ -213,7 +213,7 @@ func _build_gun() -> void:
 	arm_r.mesh = arm_mesh_r
 	arm_r.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.75, 0.55, 0.42)))
 	arm_r.rotation_degrees = Vector3(70, -10, -10)
-	arm_r.position = Vector3(0.22, -0.13, 0.05)
+	arm_r.position = Vector3(0.35, -0.22, -0.1)
 	camera.add_child(arm_r)
 
 # ─────────────────────────────────────────────
@@ -501,6 +501,7 @@ func _try_shoot() -> void:
 	_kick_gun(false)
 	_apply_recoil()
 	current_spread += spread_per_shot
+	_eject_shell()
 
 	# 应用扩散偏移到 RayCast
 	var spread := _get_current_spread()
@@ -520,6 +521,8 @@ func _try_shoot() -> void:
 			enemy_hit.emit(collider)
 			if collider.has_method("take_damage"):
 				collider.take_damage(damage_per_shot)
+			# Hit splatter particles at impact point
+			_spawn_hit_particles(raycast.get_collision_point(), raycast.get_collision_normal())
 
 # ─────────────────────────────────────────────
 # 枪械动画
@@ -583,6 +586,64 @@ func _flash_muzzle() -> void:
 			muzzle_flash.visible = false
 
 # ─────────────────────────────────────────────
+# 弹壳抛出
+# ─────────────────────────────────────────────
+func _eject_shell() -> void:
+	if camera == null:
+		return
+	var shell := MeshInstance3D.new()
+	var m := BoxMesh.new()
+	m.size = Vector3(0.012, 0.012, 0.03)
+	shell.mesh = m
+	shell.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.85, 0.7, 0.2)))
+	get_tree().current_scene.add_child(shell)
+	# Spawn at gun position (right side)
+	shell.global_position = camera.global_position + camera.global_basis * Vector3(0.15, -0.1, -0.25)
+	# Eject to the right and up with randomness
+	var eject_dir := camera.global_basis * Vector3(
+		randf_range(0.8, 1.2),
+		randf_range(0.6, 1.0),
+		randf_range(-0.2, 0.2)
+	)
+	var target := shell.global_position + eject_dir * 0.6
+	var tw := shell.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(shell, "global_position", target, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(shell, "rotation_degrees", Vector3(randf() * 720, randf() * 720, randf() * 720), 0.3)
+	tw.set_parallel(false)
+	# Fall down after arc
+	tw.tween_property(shell, "global_position:y", 0.0, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_interval(1.0)
+	tw.tween_callback(shell.queue_free)
+
+# ─────────────────────────────────────────────
+# 命中粒子效果
+# ─────────────────────────────────────────────
+func _spawn_hit_particles(hit_pos: Vector3, hit_normal: Vector3) -> void:
+	# Spawn 3-5 small box "shrapnel" pieces
+	var count := randi_range(3, 5)
+	for i in count:
+		var particle := MeshInstance3D.new()
+		var pm := BoxMesh.new()
+		pm.size = Vector3(0.02, 0.02, 0.02)
+		particle.mesh = pm
+		particle.set_surface_override_material(0, PSXManager.make_psx_material(
+			Color(0.7, 0.15, 0.1).lerp(Color(0.3, 0.05, 0.05), randf())))
+		get_tree().current_scene.add_child(particle)
+		particle.global_position = hit_pos
+		# Scatter in hemisphere around hit normal
+		var scatter := hit_normal + Vector3(
+			randf_range(-0.5, 0.5),
+			randf_range(-0.5, 0.5),
+			randf_range(-0.5, 0.5)
+		).normalized()
+		var end_pos := hit_pos + scatter * randf_range(0.15, 0.4)
+		var tw := particle.create_tween()
+		tw.tween_property(particle, "global_position", end_pos, randf_range(0.15, 0.3))
+		tw.parallel().tween_property(particle, "scale", Vector3.ZERO, 0.3)
+		tw.tween_callback(particle.queue_free)
+
+# ─────────────────────────────────────────────
 # Weapon equip (from inventory)
 # ─────────────────────────────────────────────
 func equip_weapon(item: Resource) -> void:
@@ -612,6 +673,22 @@ func equip_weapon(item: Resource) -> void:
 					break
 		if body:
 			body.set_surface_override_material(0, PSXManager.make_psx_material(item.mesh_color))
+	# ── Weapon equip animation: pull up from below ──
+	_play_equip_anim()
+
+# ─────────────────────────────────────────────
+# 武器装备动画
+# ─────────────────────────────────────────────
+func _play_equip_anim() -> void:
+	if gun_pivot == null:
+		return
+	can_shoot = false
+	gun_pivot.position = bob_origin + Vector3(0, -0.25, 0.1)
+	gun_pivot.rotation_degrees = Vector3(30, 0, 0)
+	var tw := create_tween()
+	tw.tween_property(gun_pivot, "position", bob_origin, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tw.parallel().tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.3).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(func(): can_shoot = true)
 
 # ─────────────────────────────────────────────
 # 摄像机震动系统

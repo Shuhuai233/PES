@@ -93,10 +93,30 @@ func _process(delta: float) -> void:
 func _try_pickup() -> void:
 	if Inventory.try_add(item_data, quantity):
 		picked_up.emit(item_data, quantity)
-		queue_free()
+		_play_pickup_vfx()
 	else:
 		# Flash "BACKPACK FULL" — handled by UI via Inventory.inventory_full signal
 		pass
+
+func _play_pickup_vfx() -> void:
+	# Disable further interaction
+	set_process(false)
+	monitoring = false
+	if _label:
+		_label.visible = false
+	# Light burst
+	if _light:
+		_light.light_energy = 8.0
+		_light.omni_range = 5.0
+	# Scale to zero + fade light
+	var tw := create_tween().set_parallel(true)
+	if _mesh:
+		tw.tween_property(_mesh, "scale", Vector3.ZERO, 0.2).set_ease(Tween.EASE_IN)
+		tw.tween_property(_mesh, "position:y", _mesh.position.y + 0.5, 0.2)
+	if _light:
+		tw.tween_property(_light, "light_energy", 0.0, 0.25)
+	tw.set_parallel(false)
+	tw.tween_callback(queue_free)
 
 # ─────────────────────────────────────────────
 # Proximity
