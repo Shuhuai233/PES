@@ -11,7 +11,7 @@ const ItemDB := preload("res://scripts/item_database.gd")
 # ─────────────────────────────────────────────
 @export var static_spawn_min: int = 3
 @export var static_spawn_max: int = 6
-@export var spawn_radius: float = 12.0
+@export var spawn_radius: float = 30.0
 @export var min_distance_between: float = 3.0
 @export var enemy_drop_chance: float = 0.40
 

@@ -13,6 +13,7 @@ const ItemDataRes := preload("res://scripts/item_data.gd")
 
 var loot_spawner_node: Node3D = null
 var inventory_ui_node: CanvasLayer = null
+var cover_spawner_node: Node3D = null
 
 var player_health: int = 100
 var max_health: int = 100
@@ -24,6 +25,7 @@ func _ready() -> void:
 	_setup_psx()
 	_setup_loot()
 	_setup_inventory_ui()
+	_setup_cover()
 	_connect_signals()
 	spawner.deactivate()
 
@@ -47,6 +49,14 @@ func _setup_inventory_ui() -> void:
 	inventory_ui_node.name = "InventoryUI"
 	inventory_ui_node.set_script(load("res://scripts/inventory_ui.gd"))
 	add_child(inventory_ui_node)
+
+func _setup_cover() -> void:
+	cover_spawner_node = Node3D.new()
+	cover_spawner_node.name = "CoverSpawner"
+	cover_spawner_node.set_script(load("res://scripts/cover_spawner.gd"))
+	add_child(cover_spawner_node)
+	# Defer cover spawn so all nodes are in the tree first
+	cover_spawner_node.call_deferred("spawn_cover")
 
 func _connect_signals() -> void:
 	# Player signals

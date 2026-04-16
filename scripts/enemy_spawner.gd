@@ -1,13 +1,14 @@
 extends Node3D
 
 ## EnemySpawner — Procedural enemy spawning in the arena.
+## Now builds enemies with a gun mesh for ranged cover-based AI.
 
 # ─────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────
 @export var spawn_interval: float = 4.0
-@export var max_enemies: int = 8
-@export var spawn_radius: float = 12.0
+@export var max_enemies: int = 12
+@export var spawn_radius: float = 30.0
 @export var spawn_height: float = 0.9
 @export var first_spawn_delay: float = 0.5
 
@@ -17,6 +18,13 @@ const COLOR_VARIANTS: Array[Color] = [
 	Color(0.7, 0.1, 0.1),    # red soldier
 	Color(0.1, 0.1, 0.7),    # blue grunt
 	Color(0.15, 0.5, 0.15),  # green heavy
+]
+
+## Per-variant stat tweaks: [speed, health, accuracy, burst_count, shoot_damage]
+const VARIANT_STATS := [
+	{ "speed": 3.0, "health": 80,  "accuracy": 0.80, "burst": 3, "damage": 8  },  # red — fast, fragile
+	{ "speed": 2.5, "health": 100, "accuracy": 0.85, "burst": 2, "damage": 10 },  # blue — balanced
+	{ "speed": 2.0, "health": 150, "accuracy": 0.75, "burst": 4, "damage": 6  },  # green — tanky, spray
 ]
 
 # ─────────────────────────────────────────────
@@ -102,8 +110,17 @@ func _build_enemy() -> CharacterBody3D:
 	col.shape = cap
 	root.add_child(col)
 
-	# Color variant
-	var c: Color = COLOR_VARIANTS[randi() % COLOR_VARIANTS.size()]
+	# Color variant + stats
+	var variant_idx := randi() % COLOR_VARIANTS.size()
+	var c: Color = COLOR_VARIANTS[variant_idx]
+	var stats: Dictionary = VARIANT_STATS[variant_idx]
+
+	# Apply variant stats to the enemy script properties
+	root.set("speed", stats["speed"])
+	root.set("max_health", stats["health"])
+	root.set("accuracy", stats["accuracy"])
+	root.set("burst_count", stats["burst"])
+	root.set("shoot_damage", stats["damage"])
 
 	# Torso (named MeshInstance3D so enemy.gd's @onready finds it)
 	root.add_child(_make_box("MeshInstance3D", Vector3(0.55, 0.65, 0.28), c, Vector3(0, 0.55, 0)))
@@ -118,7 +135,53 @@ func _build_enemy() -> CharacterBody3D:
 	root.add_child(_make_capsule("LegL", 0.1, 0.55, Color(0.15, 0.15, 0.2), Vector3(-0.17, 0.0, 0)))
 	root.add_child(_make_capsule("LegR", 0.1, 0.55, Color(0.15, 0.15, 0.2), Vector3(0.17, 0.0, 0)))
 
+	# ── Gun in right hand ──
+	var gun := _make_gun(c)
+	root.add_child(gun)
+
 	return root
+
+# ─────────────────────────────────────────────
+# Gun mesh (held in right hand)
+# ─────────────────────────────────────────────
+func _make_gun(body_color: Color) -> Node3D:
+	var pivot := Node3D.new()
+	pivot.name = "GunPivot"
+	pivot.position = Vector3(0.38, 0.55, -0.18)  # right hand, forward
+
+	# Gun body (dark metal)
+	var body := MeshInstance3D.new()
+	body.name = "GunBody"
+	var body_m := BoxMesh.new()
+	body_m.size = Vector3(0.06, 0.08, 0.28)
+	body.mesh = body_m
+	body.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.12, 0.12, 0.12)))
+	pivot.add_child(body)
+
+	# Magazine / grip
+	var grip := MeshInstance3D.new()
+	grip.name = "Grip"
+	var grip_m := BoxMesh.new()
+	grip_m.size = Vector3(0.05, 0.12, 0.06)
+	grip.mesh = grip_m
+	grip.position = Vector3(0, -0.08, 0.06)
+	grip.set_surface_override_material(0, PSXManager.make_psx_material(body_color.darkened(0.5)))
+	pivot.add_child(grip)
+
+	# Barrel
+	var barrel := MeshInstance3D.new()
+	barrel.name = "Barrel"
+	var barrel_m := CylinderMesh.new()
+	barrel_m.top_radius = 0.015
+	barrel_m.bottom_radius = 0.015
+	barrel_m.height = 0.12
+	barrel.mesh = barrel_m
+	barrel.rotation_degrees = Vector3(90, 0, 0)
+	barrel.position = Vector3(0, 0, -0.2)
+	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.08, 0.08, 0.08)))
+	pivot.add_child(barrel)
+
+	return pivot
 
 # ─────────────────────────────────────────────
 # Mesh helpers (reduce repetition)

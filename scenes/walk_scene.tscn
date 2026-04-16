@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3 uid="uid://walk_scene"]
+[gd_scene load_steps=24 format=3 uid="uid://walk_scene"]
 
 [ext_resource type="PackedScene" path="res://assets/washing_machine.glb" id="6_washer"]
 [ext_resource type="Script" path="res://scripts/walk_scene.gd" id="1_walk"]
@@ -8,10 +8,10 @@
 [ext_resource type="Script" path="res://scripts/walkthrough_ui.gd" id="5_ui"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
-sky_top_color = Color(0.05, 0.03, 0.1, 1)
-sky_horizon_color = Color(0.1, 0.06, 0.15, 1)
-ground_bottom_color = Color(0.03, 0.03, 0.05, 1)
-ground_horizon_color = Color(0.04, 0.02, 0.06, 1)
+sky_top_color = Color(0.28, 0.24, 0.12, 1)
+sky_horizon_color = Color(0.35, 0.30, 0.15, 1)
+ground_bottom_color = Color(0.20, 0.18, 0.08, 1)
+ground_horizon_color = Color(0.25, 0.22, 0.10, 1)
 
 [sub_resource type="Sky" id="sky_1"]
 sky_material = SubResource("sky_mat")
@@ -20,38 +20,51 @@ sky_material = SubResource("sky_mat")
 background_mode = 2
 sky = SubResource("sky_1")
 ambient_light_source = 3
-ambient_light_color = Color(0.18, 0.15, 0.25, 1)
-ambient_light_energy = 0.5
+ambient_light_color = Color(0.55, 0.50, 0.30, 1)
+ambient_light_energy = 0.6
 fog_enabled = true
-fog_light_color = Color(0.08, 0.06, 0.14, 1)
-fog_density = 0.03
+fog_light_color = Color(0.35, 0.30, 0.15, 1)
+fog_density = 0.025
 glow_enabled = false
 ssao_enabled = false
 ssil_enabled = false
 ssr_enabled = false
 adjustment_enabled = true
-adjustment_contrast = 1.2
-adjustment_saturation = 0.7
+adjustment_contrast = 1.15
+adjustment_saturation = 0.5
 
+; ---- FLOOR (80x80) ----
 [sub_resource type="BoxMesh" id="floor_mesh"]
-size = Vector3(32, 0.4, 32)
+size = Vector3(80, 0.4, 80)
 
 [sub_resource type="StandardMaterial3D" id="floor_mat"]
-albedo_color = Color(0.08, 0.07, 0.1, 1)
+albedo_color = Color(0.35, 0.32, 0.20, 1)
 roughness = 0.95
 
 [sub_resource type="BoxShape3D" id="floor_shape"]
-size = Vector3(32, 0.4, 32)
+size = Vector3(80, 0.4, 80)
 
+; ---- CEILING (80x80, low 3.2m) ----
+[sub_resource type="BoxMesh" id="ceiling_mesh"]
+size = Vector3(80, 0.3, 80)
+
+[sub_resource type="StandardMaterial3D" id="ceiling_mat"]
+albedo_color = Color(0.45, 0.42, 0.30, 1)
+roughness = 1.0
+
+[sub_resource type="BoxShape3D" id="ceiling_shape"]
+size = Vector3(80, 0.3, 80)
+
+; ---- WALLS (80 wide, 3.2 tall) ----
 [sub_resource type="BoxMesh" id="wall_mesh"]
-size = Vector3(32, 4, 0.4)
+size = Vector3(80, 3.2, 0.4)
 
 [sub_resource type="StandardMaterial3D" id="wall_mat"]
-albedo_color = Color(0.07, 0.06, 0.09, 1)
+albedo_color = Color(0.50, 0.45, 0.28, 1)
 roughness = 1.0
 
 [sub_resource type="BoxShape3D" id="wall_shape"]
-size = Vector3(32, 4, 0.4)
+size = Vector3(80, 3.2, 0.4)
 
 [sub_resource type="CapsuleShape3D" id="player_shape"]
 radius = 0.4
@@ -84,10 +97,11 @@ script = ExtResource("1_walk")
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("env_1")
 
+; Dim directional light — backrooms are mostly lit by fluorescents
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 10, 0)
-light_color = Color(0.95, 0.85, 0.7, 1)
-light_energy = 1.3
+light_color = Color(0.85, 0.78, 0.50, 1)
+light_energy = 0.4
 shadow_enabled = true
 
 ; ---- FLOOR ----
@@ -103,9 +117,22 @@ surface_material_override/0 = SubResource("floor_mat")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
 shape = SubResource("floor_shape")
 
-; ---- WALLS ----
+; ---- CEILING (low, oppressive) ----
+[node name="Ceiling" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.35, 0)
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Ceiling"]
+mesh = SubResource("ceiling_mesh")
+surface_material_override/0 = SubResource("ceiling_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ceiling"]
+shape = SubResource("ceiling_shape")
+
+; ---- WALLS (80 wide, 3.2 tall) ----
 [node name="WallNorth" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.0, -16)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, -40)
 collision_layer = 1
 collision_mask = 0
 
@@ -117,7 +144,7 @@ surface_material_override/0 = SubResource("wall_mat")
 shape = SubResource("wall_shape")
 
 [node name="WallSouth" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.0, 16)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 40)
 collision_layer = 1
 collision_mask = 0
 
@@ -129,7 +156,7 @@ surface_material_override/0 = SubResource("wall_mat")
 shape = SubResource("wall_shape")
 
 [node name="WallEast" type="StaticBody3D" parent="."]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 16, 2.0, 0)
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 40, 1.6, 0)
 collision_layer = 1
 collision_mask = 0
 
@@ -141,7 +168,7 @@ surface_material_override/0 = SubResource("wall_mat")
 shape = SubResource("wall_shape")
 
 [node name="WallWest" type="StaticBody3D" parent="."]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -16, 2.0, 0)
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -40, 1.6, 0)
 collision_layer = 1
 collision_mask = 0
 
@@ -151,6 +178,101 @@ surface_material_override/0 = SubResource("wall_mat")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallWest"]
 shape = SubResource("wall_shape")
+
+; ---- FLUORESCENT CEILING LIGHTS (backrooms grid) ----
+[node name="FluorescentLights" type="Node3D" parent="."]
+
+[node name="Light_C" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.9, 0)
+light_color = Color(0.95, 0.92, 0.70, 1)
+light_energy = 2.5
+omni_range = 14.0
+shadow_enabled = false
+
+[node name="Light_N" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.9, -18)
+light_color = Color(0.95, 0.92, 0.70, 1)
+light_energy = 2.2
+omni_range = 14.0
+shadow_enabled = false
+
+[node name="Light_S" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.9, 18)
+light_color = Color(0.95, 0.92, 0.70, 1)
+light_energy = 2.2
+omni_range = 14.0
+shadow_enabled = false
+
+[node name="Light_E" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 2.9, 0)
+light_color = Color(0.95, 0.92, 0.70, 1)
+light_energy = 2.2
+omni_range = 14.0
+shadow_enabled = false
+
+[node name="Light_W" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 2.9, 0)
+light_color = Color(0.95, 0.92, 0.70, 1)
+light_energy = 2.2
+omni_range = 14.0
+shadow_enabled = false
+
+[node name="Light_NE" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 2.9, -18)
+light_color = Color(0.92, 0.88, 0.65, 1)
+light_energy = 1.8
+omni_range = 14.0
+shadow_enabled = false
+
+[node name="Light_NW" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 2.9, -18)
+light_color = Color(0.92, 0.88, 0.65, 1)
+light_energy = 1.8
+omni_range = 14.0
+shadow_enabled = false
+
+[node name="Light_SE" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 2.9, 18)
+light_color = Color(0.92, 0.88, 0.65, 1)
+light_energy = 1.8
+omni_range = 14.0
+shadow_enabled = false
+
+[node name="Light_SW" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 2.9, 18)
+light_color = Color(0.92, 0.88, 0.65, 1)
+light_energy = 1.8
+omni_range = 14.0
+shadow_enabled = false
+
+; Far corner lights
+[node name="Light_FarN" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.9, -32)
+light_color = Color(0.90, 0.85, 0.60, 1)
+light_energy = 1.5
+omni_range = 12.0
+shadow_enabled = false
+
+[node name="Light_FarS" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.9, 32)
+light_color = Color(0.90, 0.85, 0.60, 1)
+light_energy = 1.5
+omni_range = 12.0
+shadow_enabled = false
+
+[node name="Light_FarE" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 2.9, 0)
+light_color = Color(0.90, 0.85, 0.60, 1)
+light_energy = 1.5
+omni_range = 12.0
+shadow_enabled = false
+
+[node name="Light_FarW" type="OmniLight3D" parent="FluorescentLights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 2.9, 0)
+light_color = Color(0.90, 0.85, 0.60, 1)
+light_energy = 1.5
+omni_range = 12.0
+shadow_enabled = false
 
 ; ---- PLAYER ----
 [node name="Player" type="CharacterBody3D" parent="."]
@@ -167,7 +289,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
 
 [node name="Camera3D" type="Camera3D" parent="Player/Head"]
 fov = 75.0
-far = 40.0
+far = 100.0
 
 [node name="RayCast3D" type="RayCast3D" parent="Player/Head/Camera3D"]
 enabled = true
@@ -184,7 +306,7 @@ omni_range = 4.0
 ; ---- MICROWAVE PORTAL ----
 ; Area3D: layer 8, mask 2 (detects player on layer 2)
 [node name="MicrowavePortal" type="Area3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -14)
 script = ExtResource("3_portal")
 collision_layer = 8
 collision_mask = 2
@@ -240,6 +362,6 @@ script = ExtResource("5_ui")
 
 ; ---- WASHING MACHINE ----
 [node name="WashingMachine" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, -5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, -10)
 
 [node name="WashingMachineModel" type="Node3D" parent="WashingMachine" instance=ExtResource("6_washer")]
