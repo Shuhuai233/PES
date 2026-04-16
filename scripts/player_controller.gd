@@ -133,6 +133,12 @@ var bob_origin: Vector3 = Vector3.ZERO
 var was_falling: bool = false
 var fall_velocity: float = 0.0
 
+# 摄像机震动
+var _shake_intensity: float = 0.0
+var _shake_duration: float = 0.0
+var _shake_timer: float = 0.0
+var _shake_offset: Vector3 = Vector3.ZERO
+
 # ─────────────────────────────────────────────
 # 信号
 # ─────────────────────────────────────────────
@@ -240,6 +246,7 @@ func _process(delta: float) -> void:
 	_update_recoil(delta)
 	_update_spread(delta)
 	_update_fov(delta)
+	_update_screen_shake(delta)
 
 func _tick_shoot_timer(delta: float) -> void:
 	if shoot_timer > 0.0:
@@ -605,6 +612,47 @@ func equip_weapon(item: Resource) -> void:
 					break
 		if body:
 			body.set_surface_override_material(0, PSXManager.make_psx_material(item.mesh_color))
+
+# ─────────────────────────────────────────────
+# 摄像机震动系统
+# ─────────────────────────────────────────────
+## 触发屏幕震动。intensity = 最大偏移角度（度），duration = 持续时间（秒）
+func shake_camera(intensity: float, duration: float) -> void:
+	_shake_intensity = max(_shake_intensity, intensity)
+	_shake_duration = max(_shake_duration, duration)
+	_shake_timer = 0.0
+
+func _update_screen_shake(delta: float) -> void:
+	if _shake_duration <= 0.0:
+		# 恢复偏移
+		if _shake_offset.length() > 0.001:
+			_shake_offset = _shake_offset.lerp(Vector3.ZERO, delta * 12.0)
+			head.rotation.x += _shake_offset.x
+			head.rotation.z += _shake_offset.z
+		return
+
+	_shake_timer += delta
+	if _shake_timer >= _shake_duration:
+		_shake_duration = 0.0
+		_shake_intensity = 0.0
+		return
+
+	# 衰减因子
+	var decay := 1.0 - (_shake_timer / _shake_duration)
+	var strength := _shake_intensity * decay
+
+	# 移除上一帧的偏移
+	head.rotation.x -= _shake_offset.x
+	head.rotation.z -= _shake_offset.z
+
+	# 新的随机偏移
+	_shake_offset = Vector3(
+		randf_range(-1.0, 1.0) * deg_to_rad(strength),
+		0.0,
+		randf_range(-1.0, 1.0) * deg_to_rad(strength * 0.5)
+	)
+	head.rotation.x += _shake_offset.x
+	head.rotation.z += _shake_offset.z
 
 # ─────────────────────────────────────────────
 # 辅助查询
