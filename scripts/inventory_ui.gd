@@ -97,13 +97,27 @@ func open() -> void:
 	_refresh_equip()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	ui_opened.emit()
+	# ── Slide-in animation ──
+	_bg.modulate.a = 0.0
+	_grid_container.position.y += 30.0
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(_bg, "modulate:a", 1.0, 0.2)
+	tw.tween_property(_grid_container, "position:y", _grid_container.position.y - 30.0, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
 func close() -> void:
 	is_open = false
-	_root.visible = false
 	_cancel_drag()
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	ui_closed.emit()
+	# ── Slide-out animation ──
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(_bg, "modulate:a", 0.0, 0.15)
+	tw.tween_property(_grid_container, "position:y", _grid_container.position.y + 20.0, 0.15)
+	tw.set_parallel(false)
+	tw.tween_callback(func():
+		_root.visible = false
+		_grid_container.position.y -= 20.0  # reset for next open
+	)
 
 # ─────────────────────────────────────────────
 # Pickup notification (called from walk_scene)

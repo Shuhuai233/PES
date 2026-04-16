@@ -8,7 +8,6 @@ enum PortalState { IDLE, ENTRY, ACTIVE, EXTRACTING }
 @onready var mesh: MeshInstance3D = $MeshInstance3D
 @onready var portal_light: OmniLight3D = $OmniLight3D
 @onready var label_3d: Label3D = $Label3D
-var anim: AnimationPlayer = null  # Optional — not required in base scene
 
 var state: PortalState = PortalState.IDLE
 var player_inside: bool = false
@@ -19,6 +18,10 @@ var bob_speed: float = 1.2
 var bob_amount: float = 0.25
 var base_y: float = 0.0
 
+# ── Door animation state ──
+var _door_mesh: MeshInstance3D = null
+var _door_open: bool = false
+
 signal extraction_started()
 signal extraction_complete()
 signal player_entered_portal()
@@ -28,6 +31,14 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
 	_set_state(PortalState.IDLE)
+	# Find the door glass mesh (the dark panel child)
+	_door_mesh = get_node_or_null("DoorGlass") as MeshInstance3D
+	# If scene doesn't name the door, find it by searching children
+	if _door_mesh == null:
+		for child in get_children():
+			if child is MeshInstance3D and child != mesh:
+				_door_mesh = child
+				break
 
 func _process(delta: float) -> void:
 	_bob(delta)
@@ -59,6 +70,7 @@ func _on_body_entered(body: Node3D) -> void:
 		player_inside = true
 		player_entered_portal.emit()
 		_set_state(PortalState.ACTIVE)
+		_animate_door_open()
 
 func _on_body_exited(body: Node3D) -> void:
 	if body.is_in_group("player"):
@@ -66,6 +78,7 @@ func _on_body_exited(body: Node3D) -> void:
 		extract_timer = 0.0
 		if state != PortalState.EXTRACTING:
 			_set_state(PortalState.IDLE)
+			_animate_door_close()
 
 func _set_state(new_state: PortalState) -> void:
 	state = new_state
@@ -95,3 +108,20 @@ func _update_label() -> void:
 
 func get_extract_progress() -> float:
 	return extract_timer / extract_hold_time
+
+# ─────────────────────────────────────────────
+# Door open/close animation
+# ─────────────────────────────────────────────
+func _animate_door_open() -> void:
+	if _door_mesh == null or _door_open:
+		return
+	_door_open = true
+	var tw := create_tween()
+	tw.tween_property(_door_mesh, "rotation_degrees:y", -120.0, 0.3).set_ease(Tween.EASE_OUT)
+
+func _animate_door_close() -> void:
+	if _door_mesh == null or not _door_open:
+		return
+	_door_open = false
+	var tw := create_tween()
+	tw.tween_property(_door_mesh, "rotation_degrees:y", 0.0, 0.4).set_ease(Tween.EASE_IN_OUT)
