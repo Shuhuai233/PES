@@ -20,12 +20,20 @@ var max_health: int = 100
 var in_stage: bool = false
 var session_id: String = ""
 
+# ── Fluorescent light flicker state ──
+var _flicker_lights: Array[OmniLight3D] = []
+var _flicker_timer: float = 0.0
+var _flicker_interval: float = 0.0
+var _flicker_target: OmniLight3D = null
+var _flicker_base_energy: float = 0.0
+
 func _ready() -> void:
 	session_id = SessionManager.start_session()
 	_setup_psx()
 	_setup_loot()
 	_setup_inventory_ui()
 	_setup_cover()
+	_setup_flicker()
 	_connect_signals()
 	spawner.deactivate()
 
@@ -57,6 +65,34 @@ func _setup_cover() -> void:
 	add_child(cover_spawner_node)
 	# Defer cover spawn so all nodes are in the tree first
 	cover_spawner_node.call_deferred("spawn_cover")
+
+func _setup_flicker() -> void:
+	var lights_root := get_node_or_null("FluorescentLights")
+	if lights_root == null:
+		return
+	for child in lights_root.get_children():
+		if child is OmniLight3D:
+			_flicker_lights.append(child)
+	_flicker_interval = randf_range(2.0, 6.0)
+
+func _tick_flicker(delta: float) -> void:
+	if _flicker_lights.is_empty():
+		return
+	_flicker_timer += delta
+	if _flicker_timer < _flicker_interval:
+		return
+	_flicker_timer = 0.0
+	_flicker_interval = randf_range(1.5, 5.0)
+	# Pick a random light to flicker
+	var light: OmniLight3D = _flicker_lights[randi() % _flicker_lights.size()]
+	var base_energy: float = light.light_energy
+	var tw := create_tween()
+	# Quick 2-3 flicker bursts
+	var flickers := randi_range(2, 4)
+	for i in flickers:
+		tw.tween_property(light, "light_energy", base_energy * randf_range(0.05, 0.3), 0.04)
+		tw.tween_property(light, "light_energy", base_energy * randf_range(0.6, 1.0), 0.04 + randf() * 0.06)
+	tw.tween_property(light, "light_energy", base_energy, 0.08)
 
 func _connect_signals() -> void:
 	# Player signals
@@ -95,6 +131,9 @@ func _connect_signals() -> void:
 # Process
 # ─────────────────────────────────────────────
 func _process(_delta: float) -> void:
+	# ── Fluorescent light flicker ──
+	_tick_flicker(_delta)
+
 	# Extract bar
 	var near_portal: bool = portal.player_inside
 	ui.update_extract_bar(portal.get_extract_progress(), near_portal)
@@ -154,6 +193,11 @@ func _on_extraction_started() -> void:
 func _on_extraction_complete() -> void:
 	spawner.deactivate()
 	in_stage = false
+	# ── Extraction success: white flash + freeze input ──
+	ui.flash_white(0.8)
+	player.set_process(false)
+	await get_tree().create_timer(0.4).timeout
+	player.set_process(true)
 	ui.notify_extraction_complete()
 	# Transfer backpack to stash on successful extraction
 	StashManager.transfer_backpack_to_stash()
@@ -199,6 +243,9 @@ func take_damage(amount: int) -> void:
 	ui.update_health(player_health)
 	SessionManager.set_value("damage_taken",
 		int(SessionManager.get_value("damage_taken", 0)) + amount)
+	# ── Hit feedback: screen shake + red flash ──
+	player.shake_camera(2.5, 0.2)
+	ui.flash_damage(clamp(float(amount) / 30.0, 0.15, 0.5))
 	if player_health <= 0:
 		_on_player_died()
 
@@ -206,5 +253,15 @@ func _on_player_died() -> void:
 	print("Player died — all backpack items lost")
 	Inventory.clear_all()  # items lost on death
 	SessionManager.end_session()
-	await get_tree().create_timer(1.5).timeout
+	# ── Death animation: camera tilt + fall + fade to black ──
+	player.set_physics_process(false)
+	player.set_process(false)
+	var head: Node3D = player.head
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(head, "rotation:z", deg_to_rad(45.0), 1.0).set_ease(Tween.EASE_IN)
+	tw.tween_property(head, "position:y", -0.6, 1.0).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tw.set_parallel(false)
+	ui.fade_to_black(0.8)
+	await get_tree().create_timer(2.0).timeout
 	get_tree().reload_current_scene()

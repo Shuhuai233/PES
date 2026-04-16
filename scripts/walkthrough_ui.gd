@@ -73,6 +73,7 @@ var crosshair: Control
 var stamina_bar_bg: ColorRect
 var stamina_bar_fill: ColorRect
 var fade_panel: ColorRect
+var damage_flash: ColorRect
 
 # ─────────────────────────────────────────────
 # 状态
@@ -108,6 +109,13 @@ func _build_hud() -> void:
 	fade_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(fade_panel)
 	_fade_in(fade_panel, 1.2)
+
+	# 受伤红闪覆盖层
+	damage_flash = ColorRect.new()
+	damage_flash.color = Color(0.8, 0.0, 0.0, 0.0)
+	damage_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(damage_flash)
 
 	# ── 底部 HUD 条 ──────────────────────────
 	var hud_bar := ColorRect.new()
@@ -436,3 +444,28 @@ func notify_extraction_complete() -> void:
 func _fade_in(rect: ColorRect, duration: float) -> void:
 	var tween := create_tween()
 	tween.tween_property(rect, "color:a", 0.0, duration)
+
+## 受伤红闪效果
+func flash_damage(intensity: float = 0.35) -> void:
+	if damage_flash == null:
+		return
+	damage_flash.color = Color(0.8, 0.05, 0.0, intensity)
+	var tw := create_tween()
+	tw.tween_property(damage_flash, "color:a", 0.0, 0.25)
+
+## 淡入黑屏（用于死亡）
+func fade_to_black(duration: float = 1.0) -> void:
+	if fade_panel == null:
+		return
+	fade_panel.color = Color(0, 0, 0, 0)
+	var tw := create_tween()
+	tw.tween_property(fade_panel, "color:a", 1.0, duration)
+
+## 白闪效果（用于提取成功）
+func flash_white(duration: float = 0.6) -> void:
+	if fade_panel == null:
+		return
+	fade_panel.color = Color(1, 1, 1, 0)
+	var tw := create_tween()
+	tw.tween_property(fade_panel, "color:a", 0.9, duration * 0.3)
+	tw.tween_property(fade_panel, "color:a", 0.0, duration * 0.7)
