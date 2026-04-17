@@ -1,13 +1,11 @@
 extends Node
 
 ## SquadManager — Global AI coordination singleton.
-## Inspired by F.E.A.R.'s squad system and The Division's archetype coordination.
-##
-## Responsibilities:
-##   - Shared perception (last known player position)
-##   - Role assignment (Rusher / Standard / Heavy)
-##   - Suppression tracking (who is suppressing, who is maneuvering)
-##   - Flank coordination (prevent everyone flanking to same side)
+
+# ─────────────────────────────────────────────
+# Debug state (persists across spawns)
+# ─────────────────────────────────────────────
+var debug_enabled: bool = false
 
 # ─────────────────────────────────────────────
 # Shared perception

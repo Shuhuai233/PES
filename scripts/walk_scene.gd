@@ -16,8 +16,8 @@ var inventory_ui_node: CanvasLayer = null
 var cover_spawner_node: Node3D = null
 var nav_region: NavigationRegion3D = null
 
-var player_health: int = 300
-var max_health: int = 300
+var player_health: int = 500
+var max_health: int = 500
 var in_stage: bool = false
 var session_id: String = ""
 var _debug_ai: bool = false
@@ -233,10 +233,14 @@ func _toggle_debug() -> void:
 
 	_debug_ai = not _debug_ai
 	var label_text: String = "ON" if _debug_ai else "OFF"
-	print("[Debug] AI debug overlay: %s" % label_text)
+	print("[Debug] AI debug overlay: %s  (enemies alive: %d)" % [label_text, get_tree().get_nodes_in_group("enemies").size()])
+	# Store in SquadManager so newly spawned enemies also show debug
+	var sm = get_node_or_null("/root/SquadManager")
+	if sm:
+		sm.debug_enabled = _debug_ai
 	# Toggle NavigationServer debug
 	NavigationServer3D.set_debug_enabled(_debug_ai)
-	# Toggle enemy labels
+	# Toggle enemy labels on all currently alive enemies
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy.has_method("set_debug_visible"):
 			enemy.set_debug_visible(_debug_ai)

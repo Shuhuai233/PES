@@ -133,6 +133,12 @@ func _ready() -> void:
 	var archetype_names := ["RUSHER", "STANDARD", "HEAVY"]
 	print("[Enemy] Spawned %s (HP:%d)" % [archetype_names[archetype], max_health])
 
+	# Auto-show debug label if debug mode is already on when we spawn
+	var sm2 = get_node_or_null("/root/SquadManager")
+	if sm2 and sm2.debug_enabled:
+		_debug_label.visible = true
+		_update_debug_label()
+
 func get_state() -> State:
 	return state
 
@@ -772,7 +778,12 @@ func _update_debug_label() -> void:
 	_debug_label.modulate = STATE_COLORS.get(state_name, Color.WHITE)
 
 func set_debug_visible(vis: bool) -> void:
-	if _debug_label:
-		_debug_label.visible = vis
-		if vis:
-			_update_debug_label()  # immediately update content when shown
+	if _debug_label == null:
+		return
+	_debug_label.visible = vis
+	if vis:
+		# Force immediate content update
+		var state_name: String = State.keys()[state]
+		var arch_name: String = ARCHETYPE_NAMES[archetype]
+		_debug_label.text = "%s [%s]\nHP:%d" % [state_name, arch_name, health]
+		_debug_label.modulate = STATE_COLORS.get(state_name, Color.WHITE)
