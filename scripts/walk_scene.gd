@@ -207,19 +207,39 @@ func _connect_signals() -> void:
 		inventory_ui_node.ui_closed.connect(func(): player.inventory_open = false)
 
 # ─────────────────────────────────────────────
-# Debug (F3 = toggle AI debug labels)
+# Debug (F3 = toggle AI debug labels + NavMesh visualization)
 # ─────────────────────────────────────────────
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and event.keycode == KEY_F3:
-		_debug_ai = not _debug_ai
-		var label := "ON" if _debug_ai else "OFF"
-		print("[Debug] AI debug overlay: %s" % label)
-		# Toggle NavigationServer debug
-		NavigationServer3D.set_debug_enabled(_debug_ai)
-		# Toggle enemy labels
-		for enemy in get_tree().get_nodes_in_group("enemies"):
-			if enemy.has_method("set_debug_visible"):
-				enemy.set_debug_visible(_debug_ai)
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F3 or event.physical_keycode == KEY_F3:
+			_toggle_debug()
+
+func _input(event: InputEvent) -> void:
+	# Backup: also check in _input in case _unhandled_input doesn't fire
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F3 or event.physical_keycode == KEY_F3:
+			_toggle_debug()
+
+var _f3_toggled_this_frame: bool = false
+func _toggle_debug() -> void:
+	# Prevent double-toggle from both _input and _unhandled_input
+	if _f3_toggled_this_frame:
+		return
+	_f3_toggled_this_frame = true
+	call_deferred("_reset_f3_toggle")
+
+	_debug_ai = not _debug_ai
+	var label_text: String = "ON" if _debug_ai else "OFF"
+	print("[Debug] AI debug overlay: %s" % label_text)
+	# Toggle NavigationServer debug
+	NavigationServer3D.set_debug_enabled(_debug_ai)
+	# Toggle enemy labels
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if enemy.has_method("set_debug_visible"):
+			enemy.set_debug_visible(_debug_ai)
+
+func _reset_f3_toggle() -> void:
+	_f3_toggled_this_frame = false
 
 # ─────────────────────────────────────────────
 # Process
