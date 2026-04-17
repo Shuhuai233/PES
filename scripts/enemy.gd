@@ -121,10 +121,13 @@ func _ready() -> void:
 	_debug_label = Label3D.new()
 	_debug_label.name = "DebugLabel"
 	_debug_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_debug_label.font_size = 32
-	_debug_label.position = Vector3(0, 2.0, 0)
+	_debug_label.font_size = 48
+	_debug_label.position = Vector3(0, 2.4, 0)
 	_debug_label.no_depth_test = true
-	_debug_label.visible = false  # off by default, F3 toggles
+	_debug_label.outline_size = 8
+	_debug_label.modulate = Color.WHITE
+	_debug_label.render_priority = 10
+	_debug_label.visible = false
 	add_child(_debug_label)
 
 	var archetype_names := ["RUSHER", "STANDARD", "HEAVY"]
@@ -219,7 +222,7 @@ func _state_seek_cover(delta: float) -> void:
 		return
 
 	# If stuck for too long, pick new cover
-	if _nav_path_age > 5.0:
+	if _nav_path_age > 8.0:
 		_cover_point = null
 		_nav_target_set = false
 		return
@@ -381,12 +384,16 @@ func _state_advance(delta: float) -> void:
 		_fire_at_player()
 		_advance_shoot_timer = randf_range(0.8, 1.5)
 
-	# Non-rushers try to find cover if far enough away
-	if archetype != 0 and dist > advance_range * 1.5:
-		var cover := _find_best_cover()
-		if cover:
-			_cover_point = cover
-			_transition(State.SEEK_COVER)
+	# Non-rushers try to find cover much more aggressively
+	if archetype != 0:
+		# Always try to find cover when far enough
+		if dist > advance_range:
+			var cover := _find_best_cover()
+			if cover:
+				_cover_point = cover
+				_nav_target_set = false
+				_transition(State.SEEK_COVER)
+				return
 
 # ═════════════════════════════════════════════
 # FLANK — navigate to player's side via NavMesh
@@ -556,6 +563,8 @@ func _find_best_cover() -> Node3D:
 	var best: Node3D = null
 	var best_score: float = -999.0
 
+	var space := get_world_3d().direct_space_state
+
 	for cp: Node3D in covers:
 		if not is_instance_valid(cp):
 			continue
@@ -571,30 +580,56 @@ func _find_best_cover() -> Node3D:
 		if dist_to_me > cover_search_radius:
 			continue
 
+		# Skip cover that's too close to player (no protection)
+		if dist_to_player < 2.5:
+			continue
+
 		var score: float = 0.0
-		score -= dist_to_me * 1.5
-		score += clamp(dist_to_player, 4.0, 12.0) * 0.5
 
-		# Cover blocks LOS from player
-		var cover_to_player := (player_pos - cp_pos).normalized()
-		var cover_to_me := (my_pos - cp_pos).normalized()
-		var dot := cover_to_player.dot(cover_to_me)
-		if dot < 0.0:
-			score += 5.0
+		# 1. Prefer closer cover (easier to reach)
+		score -= dist_to_me * 1.0
 
-		# Flank bonus: cover on player's side
-		if _player:
-			var player_fwd := -_player.global_basis.z
-			player_fwd.y = 0.0
-			player_fwd = player_fwd.normalized()
-			var to_cover := (cp_pos - player_pos).normalized()
-			var flank_dot := player_fwd.dot(to_cover)
-			if abs(flank_dot) < 0.4:
-				score += 3.0  # side position bonus
+		# 2. Prefer medium distance from player (can still shoot)
+		score += clamp(dist_to_player, 5.0, 14.0) * 0.4
+
+		# 3. KEY FIX: Raycast from cover_point toward player.
+		#    If something blocks the ray = this cover point actually provides concealment.
+		var ray_origin := cp_pos + Vector3(0, 0.8, 0)
+		var ray_target := player_pos + Vector3(0, 0.8, 0)
+		var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_target)
+		query.exclude = [get_rid()]
+		query.collision_mask = 0b001  # layer 1 = static geometry only
+		var result := space.intersect_ray(query)
+		if result and not result.collider.is_in_group("player"):
+			# Something blocks LOS from cover to player = good cover!
+			score += 15.0
+		else:
+			# No obstruction — this cover doesn't hide you from player
+			score -= 8.0
+
+		# 4. Geometric check: is the cover point on the opposite side of
+		#    the obstacle from the player?
+		#    cover_to_player and cover_to_me should point in OPPOSITE directions
+		#    meaning the obstacle is between the cover point and the player.
+		var to_player := (player_pos - cp_pos)
+		to_player.y = 0.0
+		to_player = to_player.normalized()
+		var to_me := (my_pos - cp_pos)
+		to_me.y = 0.0
+		to_me = to_me.normalized()
+		# dot > 0 means player and enemy are on the SAME side of cover point = bad
+		# dot < 0 means they are on OPPOSITE sides = cover point is between them = good
+		var dot := to_player.dot(to_me)
+		if dot < -0.3:
+			score += 6.0  # enemy and player on opposite sides of cover
+		elif dot > 0.3:
+			score -= 4.0  # same side, cover won't help much
 
 		if score > best_score:
 			best_score = score
 			best = cp
+
+	return best
 
 	return best
 
@@ -733,9 +768,11 @@ func _update_debug_label() -> void:
 		return
 	var state_name: String = State.keys()[state]
 	var arch_name: String = ARCHETYPE_NAMES[archetype]
-	_debug_label.text = "%s [%s]\nHP:%d SUP:%.1f" % [state_name, arch_name, health, _suppression_level]
+	_debug_label.text = "%s [%s]\nHP:%d" % [state_name, arch_name, health]
 	_debug_label.modulate = STATE_COLORS.get(state_name, Color.WHITE)
 
-func set_debug_visible(visible: bool) -> void:
+func set_debug_visible(vis: bool) -> void:
 	if _debug_label:
-		_debug_label.visible = visible
+		_debug_label.visible = vis
+		if vis:
+			_update_debug_label()  # immediately update content when shown
