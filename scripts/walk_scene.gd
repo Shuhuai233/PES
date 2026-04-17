@@ -16,8 +16,8 @@ var inventory_ui_node: CanvasLayer = null
 var cover_spawner_node: Node3D = null
 var nav_region: NavigationRegion3D = null
 
-var player_health: int = 100
-var max_health: int = 100
+var player_health: int = 300
+var max_health: int = 300
 var in_stage: bool = false
 var session_id: String = ""
 var _debug_ai: bool = false
@@ -314,60 +314,85 @@ func _toggle_navmesh_debug_mesh() -> void:
 
 func _toggle_cover_debug() -> void:
 	if _debug_ai:
-		# Clear old markers first
-		_clear_cover_debug()
-		# Draw a sphere at every cover point
+		if _cover_debug_nodes.size() > 0:
+			# Already built, just show
+			for node in _cover_debug_nodes:
+				if is_instance_valid(node):
+					node.visible = true
+			return
+		# Build markers for the first time
 		var covers := get_tree().get_nodes_in_group("cover_point")
 		for cp: Node3D in covers:
 			if not is_instance_valid(cp):
 				continue
-			var is_claimed: bool = false
-			var claimer_name: String = ""
-			if cp.has_meta("claimed_by"):
-				var claimer = cp.get_meta("claimed_by")
-				if is_instance_valid(claimer) and not claimer.is_dead:
-					is_claimed = true
-					claimer_name = claimer.name
 
-			# Sphere marker
+			# Sphere marker — store cover point reference in metadata
 			var marker := MeshInstance3D.new()
 			marker.name = "CoverDebug"
+			marker.set_meta("cover_point", cp)
 			var sphere := SphereMesh.new()
-			sphere.radius = 0.2
-			sphere.height = 0.4
+			sphere.radius = 0.25
+			sphere.height = 0.5
 			marker.mesh = sphere
 			var mat := StandardMaterial3D.new()
 			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			mat.no_depth_test = true
 			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			if is_claimed:
-				mat.albedo_color = Color(1.0, 0.2, 0.2, 0.7)  # red = occupied
-			else:
-				mat.albedo_color = Color(0.2, 1.0, 0.2, 0.7)  # green = free
+			mat.albedo_color = Color(0.2, 1.0, 0.2, 0.8)
 			marker.set_surface_override_material(0, mat)
-			marker.global_position = cp.global_position + Vector3(0, 0.5, 0)
+			marker.global_position = cp.global_position + Vector3(0, 0.6, 0)
 			add_child(marker)
 			_cover_debug_nodes.append(marker)
 
-			# Label above marker
+			# Label
 			var label := Label3D.new()
 			label.name = "CoverLabel"
+			label.set_meta("cover_point", cp)
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			label.font_size = 20
+			label.font_size = 22
 			label.no_depth_test = true
-			label.global_position = cp.global_position + Vector3(0, 0.9, 0)
-			if is_claimed:
-				label.text = "CLAIMED\n(%s)" % claimer_name
-				label.modulate = Color(1.0, 0.3, 0.3)
-			else:
-				label.text = "FREE"
-				label.modulate = Color(0.3, 1.0, 0.3)
+			label.global_position = cp.global_position + Vector3(0, 1.1, 0)
+			label.text = "FREE"
+			label.modulate = Color(0.3, 1.0, 0.3)
 			add_child(label)
 			_cover_debug_nodes.append(label)
 
-		print("[Debug] Cover points visualized: %d (%d total)" % [covers.size(), _cover_debug_nodes.size() / 2])
+		print("[Debug] Cover debug built: %d cover points" % covers.size())
+		_refresh_cover_debug_colors()
 	else:
-		_clear_cover_debug()
+		for node in _cover_debug_nodes:
+			if is_instance_valid(node):
+				node.visible = false
+
+func _refresh_cover_debug_colors() -> void:
+	for node in _cover_debug_nodes:
+		if not is_instance_valid(node):
+			continue
+		if not node.has_meta("cover_point"):
+			continue
+		var cp = node.get_meta("cover_point")
+		if not is_instance_valid(cp):
+			continue
+
+		var is_claimed: bool = false
+		var claimer_name: String = ""
+		if cp.has_meta("claimed_by"):
+			var claimer = cp.get_meta("claimed_by")
+			if is_instance_valid(claimer) and not claimer.is_dead:
+				is_claimed = true
+				claimer_name = claimer.name
+
+		if node is MeshInstance3D:
+			var mat := node.get_surface_override_material(0) as StandardMaterial3D
+			if mat:
+				mat.albedo_color = Color(1.0, 0.2, 0.2, 0.8) if is_claimed else Color(0.2, 1.0, 0.2, 0.8)
+		elif node is Label3D:
+			if is_claimed:
+				node.text = "CLAIMED\n%s" % claimer_name
+				node.modulate = Color(1.0, 0.3, 0.3)
+			else:
+				node.text = "FREE"
+				node.modulate = Color(0.3, 1.0, 0.3)
 
 func _clear_cover_debug() -> void:
 	for node in _cover_debug_nodes:
@@ -382,12 +407,12 @@ func _reset_f3_toggle() -> void:
 # Process
 # ─────────────────────────────────────────────
 func _process(_delta: float) -> void:
-	# ── Refresh cover debug every 1s ──
-	if _debug_ai:
+	# ── Refresh cover debug colors every 0.5s (don't rebuild, just recolor) ──
+	if _debug_ai and _cover_debug_nodes.size() > 0:
 		_cover_debug_refresh_timer -= _delta
 		if _cover_debug_refresh_timer <= 0.0:
-			_cover_debug_refresh_timer = 1.0
-			_toggle_cover_debug()  # will clear + redraw
+			_cover_debug_refresh_timer = 0.5
+			_refresh_cover_debug_colors()
 
 	# ── Fluorescent light flicker ──
 	_tick_flicker(_delta)
