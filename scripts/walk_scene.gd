@@ -340,7 +340,7 @@ func _toggle_cover_debug() -> void:
 			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			mat.albedo_color = Color(0.2, 1.0, 0.2, 0.8)
 			marker.set_surface_override_material(0, mat)
-			marker.global_position = cp.global_position + Vector3(0, 0.6, 0)
+			marker.global_position = cp.global_position + Vector3(0, 1.5, 0)
 			add_child(marker)
 			_cover_debug_nodes.append(marker)
 
@@ -351,7 +351,7 @@ func _toggle_cover_debug() -> void:
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 			label.font_size = 22
 			label.no_depth_test = true
-			label.global_position = cp.global_position + Vector3(0, 1.1, 0)
+			label.global_position = cp.global_position + Vector3(0, 2.1, 0)
 			label.text = "FREE"
 			label.modulate = Color(0.3, 1.0, 0.3)
 			add_child(label)

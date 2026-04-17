@@ -67,6 +67,8 @@ var _cover_timer: float = 0.0
 var _burst_remaining: int = 0
 var _burst_timer: float = 0.0
 var _peek_timer: float = 0.0
+var _nav_target_set: bool = false    ## true after target_position was set this state
+var _nav_path_age: float = 0.0      ## how long since we set the nav target
 var _melee_cooldown: float = 0.0
 var _advance_shoot_timer: float = 0.0
 var _no_cover_timer: float = 0.0
@@ -201,20 +203,42 @@ func _state_seek_cover(delta: float) -> void:
 
 	_no_cover_timer = 0.0
 
-	# Navigate to cover using NavAgent
-	_nav_agent.target_position = _cover_point.global_position
-	if _nav_agent.is_navigation_finished():
+	# Set nav target (only once per cover point to avoid thrashing)
+	if not _nav_target_set:
+		_nav_agent.target_position = _cover_point.global_position
+		_nav_target_set = true
+		_nav_path_age = 0.0
+
+	_nav_path_age += delta
+
+	# Use flat distance to decide arrival — don't rely on is_navigation_finished()
+	var dist_to_cover := _flat_dist_to(_cover_point.global_position)
+	if dist_to_cover < 1.2:
 		_claim_cover(_cover_point)
 		_transition(State.IN_COVER)
 		return
 
+	# If stuck for too long, pick new cover
+	if _nav_path_age > 5.0:
+		_cover_point = null
+		_nav_target_set = false
+		return
+
 	# Follow NavMesh path
-	var next_pos := _nav_agent.get_next_path_position()
-	var dir := (next_pos - global_position)
-	dir.y = 0.0
-	dir = dir.normalized()
-	velocity.x = dir.x * sprint_speed
-	velocity.z = dir.z * sprint_speed
+	if not _nav_agent.is_navigation_finished():
+		var next_pos := _nav_agent.get_next_path_position()
+		var dir := (next_pos - global_position)
+		dir.y = 0.0
+		if dir.length() > 0.1:
+			dir = dir.normalized()
+			velocity.x = dir.x * sprint_speed
+			velocity.z = dir.z * sprint_speed
+	else:
+		# NavMesh path finished but we're not close enough — walk directly
+		var dir := _flat_dir_to(_cover_point.global_position)
+		velocity.x = dir.x * speed
+		velocity.z = dir.z * speed
+
 	_look_at_player()
 
 # ═════════════════════════════════════════════
@@ -302,17 +326,26 @@ func _state_retreat(delta: float) -> void:
 		_transition(State.SEEK_COVER)
 		return
 
-	_nav_agent.target_position = _cover_point.global_position
-	if _nav_agent.is_navigation_finished():
+	# Use flat distance for arrival check
+	var dist_to_cover := _flat_dist_to(_cover_point.global_position)
+	if dist_to_cover < 1.2:
 		_transition(State.IN_COVER)
 		return
 
-	var next_pos := _nav_agent.get_next_path_position()
-	var dir := (next_pos - global_position)
-	dir.y = 0.0
-	dir = dir.normalized()
-	velocity.x = dir.x * speed * 2.5
-	velocity.z = dir.z * speed * 2.5
+	_nav_agent.target_position = _cover_point.global_position
+
+	if not _nav_agent.is_navigation_finished():
+		var next_pos := _nav_agent.get_next_path_position()
+		var dir := (next_pos - global_position)
+		dir.y = 0.0
+		if dir.length() > 0.1:
+			dir = dir.normalized()
+			velocity.x = dir.x * speed * 2.5
+			velocity.z = dir.z * speed * 2.5
+	else:
+		var dir := _flat_dir_to(_cover_point.global_position)
+		velocity.x = dir.x * speed * 2.5
+		velocity.z = dir.z * speed * 2.5
 	_look_at_player()
 
 # ═════════════════════════════════════════════
@@ -600,6 +633,9 @@ func _transition(new_state: State) -> void:
 	var new_name: String = State.keys()[new_state]
 	print("[Enemy:%s] %s -> %s" % [name, old_name, new_name])
 	state = new_state
+	# Reset nav tracking on every state change
+	_nav_target_set = false
+	_nav_path_age = 0.0
 	match new_state:
 		State.SEEK_COVER:
 			_no_cover_timer = 0.0
