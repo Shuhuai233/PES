@@ -21,6 +21,7 @@ var max_health: int = 100
 var in_stage: bool = false
 var session_id: String = ""
 var _debug_ai: bool = false
+var _navmesh_debug_mesh: MeshInstance3D = null
 
 # ── Fluorescent light flicker state ──
 var _flicker_lights: Array[OmniLight3D] = []
@@ -237,6 +238,75 @@ func _toggle_debug() -> void:
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy.has_method("set_debug_visible"):
 			enemy.set_debug_visible(_debug_ai)
+	# Toggle hand-drawn NavMesh overlay
+	_toggle_navmesh_debug_mesh()
+
+func _toggle_navmesh_debug_mesh() -> void:
+	if _debug_ai:
+		# Build a visible mesh from the NavMesh polygons
+		if _navmesh_debug_mesh != null and is_instance_valid(_navmesh_debug_mesh):
+			_navmesh_debug_mesh.visible = true
+			return
+		if nav_region == null or nav_region.navigation_mesh == null:
+			print("[Debug] No NavMesh to visualize")
+			return
+		var nm: NavigationMesh = nav_region.navigation_mesh
+		var verts: PackedVector3Array = nm.get_vertices()
+		var poly_count: int = nm.get_polygon_count()
+		if poly_count == 0 or verts.size() == 0:
+			print("[Debug] NavMesh is empty, nothing to draw")
+			return
+
+		# Build triangle mesh from NavMesh polygons
+		var mesh_verts := PackedVector3Array()
+		var mesh_colors := PackedColorArray()
+		var base_color := Color(0.1, 0.6, 1.0, 0.2)
+		for i in poly_count:
+			var poly: PackedInt32Array = nm.get_polygon(i)
+			if poly.size() < 3:
+				continue
+			# Fan triangulation from first vertex
+			var v0: Vector3 = verts[poly[0]] + Vector3(0, 0.05, 0)
+			for j in range(1, poly.size() - 1):
+				var v1: Vector3 = verts[poly[j]] + Vector3(0, 0.05, 0)
+				var v2: Vector3 = verts[poly[j + 1]] + Vector3(0, 0.05, 0)
+				mesh_verts.append(v0)
+				mesh_verts.append(v1)
+				mesh_verts.append(v2)
+				# Random tint per polygon for visibility
+				var tint: Color = Color(
+					base_color.r + randf() * 0.2,
+					base_color.g + randf() * 0.15,
+					base_color.b,
+					base_color.a
+				)
+				mesh_colors.append(tint)
+				mesh_colors.append(tint)
+				mesh_colors.append(tint)
+
+		var arr_mesh := ArrayMesh.new()
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = mesh_verts
+		arrays[Mesh.ARRAY_COLOR] = mesh_colors
+		arr_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+		var mat := StandardMaterial3D.new()
+		mat.vertex_color_use_as_albedo = true
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mat.no_depth_test = true
+
+		_navmesh_debug_mesh = MeshInstance3D.new()
+		_navmesh_debug_mesh.name = "NavMeshDebug"
+		_navmesh_debug_mesh.mesh = arr_mesh
+		_navmesh_debug_mesh.set_surface_override_material(0, mat)
+		add_child(_navmesh_debug_mesh)
+		print("[Debug] NavMesh debug mesh created: %d triangles" % (mesh_verts.size() / 3))
+	else:
+		if _navmesh_debug_mesh != null and is_instance_valid(_navmesh_debug_mesh):
+			_navmesh_debug_mesh.visible = false
 
 func _reset_f3_toggle() -> void:
 	_f3_toggled_this_frame = false
