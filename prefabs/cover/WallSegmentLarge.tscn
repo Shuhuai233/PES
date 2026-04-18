@@ -17,15 +17,3 @@ mesh = SubResource("mesh")
 [node name="Collision" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
 shape = SubResource("shape")
-
-[node name="CoverFront" type="Node3D" parent="." groups=["cover_point"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.6)
-
-[node name="CoverBack" type="Node3D" parent="." groups=["cover_point"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.6)
-
-[node name="CoverLeft" type="Node3D" parent="." groups=["cover_point"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.9, 0, 0)
-
-[node name="CoverRight" type="Node3D" parent="." groups=["cover_point"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.9, 0, 0)
