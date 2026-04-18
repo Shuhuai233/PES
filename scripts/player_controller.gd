@@ -1132,7 +1132,7 @@ func _show_scope_overlay(show: bool) -> void:
 		var vp_size := get_viewport().get_visible_rect().size
 		var cx := vp_size.x * 0.5
 		var cy := vp_size.y * 0.5
-		var radius := min(cx, cy) * 0.38
+		var radius: float = min(cx, cy) * 0.38
 		# 上下左右遮罩
 		var masks: Array[ColorRect] = []
 		for i in 4:
