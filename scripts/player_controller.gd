@@ -279,40 +279,39 @@ func _add_arms(left_pos: Vector3, right_pos: Vector3) -> void:
 ## 添加机械瞄具（前准星 + 后照门）
 ## front_z: 前准星 Z 位置, rear_z: 后照门 Z 位置, rail_y: 导轨顶面 Y（枪身顶部）
 func _add_iron_sights(front_z: float, rear_z: float, rail_y: float) -> void:
-	# 瞄具用无抖动材质（关闭 PSX 顶点抖动避免 z-fighting）
 	var sight_mat := _gun_mat(Color(0.06, 0.06, 0.06))
 	var dot_mat := _gun_mat(Color(1.0, 0.3, 0.1))
-	# 统一瞄具顶端高度 = 0.13（所有武器一致，方便 ADS 对齐）
-	var sight_top: float = 0.13
+	# 瞄具顶端高度（需高出枪体足够多避免穿模）
+	var sight_top: float = 0.135
 
-	# ── 前准星 ──
-	var fs_height: float = sight_top - rail_y + 0.015
+	# ── 前准星（粗柱，远离枪体表面）──
+	var fs_height: float = sight_top - rail_y + 0.02
 	var fs_base := MeshInstance3D.new()
 	fs_base.name = "FrontSight"
 	var fsm := BoxMesh.new()
-	fsm.size = Vector3(0.012, fs_height, 0.008)
+	fsm.size = Vector3(0.014, fs_height, 0.010)
 	fs_base.mesh = fsm
-	fs_base.position = Vector3(0, rail_y + fs_height * 0.5, front_z)
+	fs_base.position = Vector3(0, rail_y + fs_height * 0.5 + 0.003, front_z)
 	fs_base.set_surface_override_material(0, sight_mat)
 	gun_pivot.add_child(fs_base)
-	# 荧光准星点（最顶端，稍大以便看清）
+	# 荧光准星点
 	var dot := MeshInstance3D.new()
 	dot.name = "FrontDot"
 	var dm := BoxMesh.new()
 	dm.size = Vector3(0.008, 0.008, 0.008)
 	dot.mesh = dm
-	dot.position = Vector3(0, sight_top + 0.005, front_z)
+	dot.position = Vector3(0, sight_top + 0.008, front_z)
 	dot.set_surface_override_material(0, dot_mat)
 	gun_pivot.add_child(dot)
 
-	# ── 后照门（U 形缺口）──
-	var rs_height: float = sight_top - rail_y + 0.015
+	# ── 后照门 ──
+	var rs_height: float = sight_top - rail_y + 0.02
 	var rs_l := MeshInstance3D.new()
 	rs_l.name = "RearSightL"
 	var rlm := BoxMesh.new()
 	rlm.size = Vector3(0.008, rs_height, 0.010)
 	rs_l.mesh = rlm
-	rs_l.position = Vector3(-0.016, rail_y + rs_height * 0.5, rear_z)
+	rs_l.position = Vector3(-0.016, rail_y + rs_height * 0.5 + 0.003, rear_z)
 	rs_l.set_surface_override_material(0, sight_mat)
 	gun_pivot.add_child(rs_l)
 	var rs_r := MeshInstance3D.new()
@@ -320,7 +319,7 @@ func _add_iron_sights(front_z: float, rear_z: float, rail_y: float) -> void:
 	var rrm := BoxMesh.new()
 	rrm.size = Vector3(0.008, rs_height, 0.010)
 	rs_r.mesh = rrm
-	rs_r.position = Vector3(0.016, rail_y + rs_height * 0.5, rear_z)
+	rs_r.position = Vector3(0.016, rail_y + rs_height * 0.5 + 0.003, rear_z)
 	rs_r.set_surface_override_material(0, sight_mat)
 	gun_pivot.add_child(rs_r)
 	var rs_bar := MeshInstance3D.new()
@@ -328,9 +327,59 @@ func _add_iron_sights(front_z: float, rear_z: float, rail_y: float) -> void:
 	var rbm := BoxMesh.new()
 	rbm.size = Vector3(0.040, 0.008, 0.010)
 	rs_bar.mesh = rbm
-	rs_bar.position = Vector3(0, rail_y + 0.004, rear_z)
+	rs_bar.position = Vector3(0, rail_y + 0.007, rear_z)
 	rs_bar.set_surface_override_material(0, sight_mat)
 	gun_pivot.add_child(rs_bar)
+
+## 红点/全息瞄具（AR 用）— 方形外壳框架 + 中心红点
+## rail_y: 导轨顶面 Y（枪身顶部）
+func _add_red_dot_sight(rail_y: float) -> void:
+	var frame_col := _gun_mat(Color(0.08, 0.08, 0.08))
+	var mount_y: float = rail_y + 0.005
+	var center_y: float = mount_y + 0.035  # 红点中心高度
+	var sight_z: float = -0.12  # 瞄具 Z 位置
+	# 底座（安装在皮卡汀尼导轨上）
+	var base := MeshInstance3D.new()
+	base.name = "RDSBase"
+	var basem := BoxMesh.new()
+	basem.size = Vector3(0.045, 0.012, 0.06)
+	base.mesh = basem
+	base.position = Vector3(0, mount_y, sight_z)
+	base.set_surface_override_material(0, frame_col)
+	gun_pivot.add_child(base)
+	# 左支柱
+	var l_post := MeshInstance3D.new()
+	var lpm := BoxMesh.new()
+	lpm.size = Vector3(0.006, 0.05, 0.04)
+	l_post.mesh = lpm
+	l_post.position = Vector3(-0.020, mount_y + 0.03, sight_z)
+	l_post.set_surface_override_material(0, frame_col)
+	gun_pivot.add_child(l_post)
+	# 右支柱
+	var r_post := MeshInstance3D.new()
+	var rpm := BoxMesh.new()
+	rpm.size = Vector3(0.006, 0.05, 0.04)
+	r_post.mesh = rpm
+	r_post.position = Vector3(0.020, mount_y + 0.03, sight_z)
+	r_post.set_surface_override_material(0, frame_col)
+	gun_pivot.add_child(r_post)
+	# 顶部横梁
+	var top_bar := MeshInstance3D.new()
+	var tbm := BoxMesh.new()
+	tbm.size = Vector3(0.046, 0.006, 0.04)
+	top_bar.mesh = tbm
+	top_bar.position = Vector3(0, mount_y + 0.058, sight_z)
+	top_bar.set_surface_override_material(0, frame_col)
+	gun_pivot.add_child(top_bar)
+	# 红点（中心发光点，用明亮红色）
+	var dot := MeshInstance3D.new()
+	dot.name = "RedDot"
+	var dm := BoxMesh.new()
+	dm.size = Vector3(0.006, 0.006, 0.004)
+	dot.mesh = dm
+	dot.position = Vector3(0, center_y, sight_z)
+	dot.set_surface_override_material(0, _gun_mat(Color(1.0, 0.1, 0.1)))
+	gun_pivot.add_child(dot)
 
 ## 根据武器 ID 程序化构建不同外形的枪
 func _build_procedural_gun(weapon_id: StringName) -> void:
@@ -506,8 +555,8 @@ func _make_gun_ar() -> void:
 	grip.set_surface_override_material(0, _gun_mat(Color(0.1, 0.1, 0.1)))
 	gun_pivot.add_child(grip)
 	gun_mesh = body
-	# 机瞄（AR bullpup：导轨顶面 Y=0.08）
-	_add_iron_sights(-0.38, 0.06, 0.08)
+	# 红点瞄具（全息风格：方形外壳 + 红色准星点）
+	_add_red_dot_sight(0.08)
 	# 手臂：左手握护手，右手握把
 	_add_arms(Vector3(0, -0.04, -0.28), Vector3(0, -0.08, 0.13))
 
@@ -861,7 +910,11 @@ func _update_weapon_bob(delta: float) -> void:
 			camera.rotation_degrees.z = lerp(camera.rotation_degrees.z, 0.0, delta * 6.0)
 	else:
 		bob_time = 0.0
-		gun_pivot.position = gun_pivot.position.lerp(bob_origin, delta * 8.0)
+		# ADS 时直接 snap 到目标位置（避免 lerp 指数衰减永远到不了 X=0）
+		if is_aiming and ads_alpha > 0.95:
+			gun_pivot.position = bob_origin
+		else:
+			gun_pivot.position = gun_pivot.position.lerp(bob_origin, delta * 10.0)
 		camera.rotation_degrees.z = lerp(camera.rotation_degrees.z, 0.0, delta * 6.0)
 
 	# 落地冲击检测
@@ -1233,26 +1286,23 @@ func _update_ads(delta: float) -> void:
 		# 只在非 bob 动画时更新 bob_origin，bob 动画会自己处理
 		bob_origin = target_pos
 
-	# 狙击镜特殊处理：高倍率 ADS 时显示黑边遮罩，隐藏大部分枪体但保留枪管
+	# 狙击镜/DMR ADS 时隐藏整个枪模（用 scope overlay 代替）
 	if _is_sniper():
-		var sniper_threshold := 0.85
-		if ads_alpha > sniper_threshold:
+		if ads_alpha > 0.85:
 			_show_scope_overlay(true)
-			# 隐藏手臂和大部分枪体，但保留枪管可见
-			if gun_pivot:
-				for child in gun_pivot.get_children():
-					if child is Node3D and child.name in ["ArmL", "ArmR"]:
-						child.visible = false
-					elif child is MeshInstance3D and child.name == "Body":
-						child.visible = false
+			if gun_pivot: gun_pivot.visible = false
 		else:
 			_show_scope_overlay(false)
-			if gun_pivot:
-				for child in gun_pivot.get_children():
-					if child is Node3D or child is MeshInstance3D:
-						child.visible = true
+			if gun_pivot: gun_pivot.visible = true
+	elif _current_weapon_id == &"dmr_long":
+		# DMR ADS 时也隐藏枪模，用简化的瞄准视图
+		if ads_alpha > 0.85:
+			if gun_pivot: gun_pivot.visible = false
+		else:
+			if gun_pivot: gun_pivot.visible = true
 	else:
 		_show_scope_overlay(false)
+		if gun_pivot: gun_pivot.visible = true
 
 func _is_sniper() -> bool:
 	return _current_weapon_id == &"sniper_disc"
