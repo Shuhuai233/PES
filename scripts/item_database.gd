@@ -27,7 +27,7 @@ static func _ensure_init() -> void:
 	#   Light弹药，极高射速，弹匣大，精度衰减快
 	_register(_weapon(&"smg_short", "BRRT Compact",
 		"[Short 5-15m] Light rounds。极高射速压制。方块弹匣顶部弹出，超出15m命中全靠缘分。",
-		ItemDataRes.Rarity.UNCOMMON, 12, 0.065, 35, 1.6, 0.05, 0.03,
+		ItemDataRes.Rarity.UNCOMMON, 12, 0.1, 35, 1.6, 0.05, 0.03,
 		Color(0.25, 0.45, 0.55), 20.0, 2))
 
 	# Slot 3 — Medium (15-40m): M77 Overrun 突击步枪
@@ -35,7 +35,7 @@ static func _ensure_init() -> void:
 	#   Light弹药，bullpup构型，均衡全能
 	_register(_weapon(&"ar_medium", "M77 Overrun",
 		"[Medium 15-40m] Light rounds。Bullpup全能突击步枪。稳定可靠，无明显短板。",
-		ItemDataRes.Rarity.COMMON, 26, 0.12, 28, 2.0, 0.07, 0.006,
+		ItemDataRes.Rarity.COMMON, 26, 0.15, 28, 2.0, 0.07, 0.006,
 		Color(0.22, 0.35, 0.28), 50.0, 3))
 
 	# Slot 4 — Long (40-100m): Repeater HPR 精确步枪

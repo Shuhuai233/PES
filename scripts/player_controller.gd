@@ -339,8 +339,14 @@ func _handle_action_input() -> void:
 	else:
 		_sniper_charging = false
 		_sniper_charge = 0.0
-		if Input.is_action_pressed("shoot") and can_shoot and not is_reloading:
-			_try_shoot()
+		# Shotgun/DMR 半自动（单发），其余全自动
+		var is_semi: bool = _current_weapon_id == &"shotgun_cqc" or _current_weapon_id == &"dmr_long"
+		if is_semi:
+			if Input.is_action_just_pressed("shoot") and can_shoot and not is_reloading:
+				_try_shoot()
+		else:
+			if Input.is_action_pressed("shoot") and can_shoot and not is_reloading:
+				_try_shoot()
 	# DMR 连击超时
 	if _dmr_streak > 0:
 		_dmr_streak_timer -= get_process_delta_time()
