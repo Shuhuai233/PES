@@ -45,6 +45,15 @@ const QUICK_SLOT_IDS: Array[StringName] = [
 @export var fov_lerp_speed: float = 8.0      ## FOV 插值速度
 @export var head_tilt_angle: float = 2.5     ## 奔跑侧倾最大角度（度）
 
+@export_group("ADS (Aim Down Sights)")
+@export var ads_fov: float = 55.0            ## ADS 时 FOV（普通武器）
+@export var ads_sniper_fov: float = 25.0     ## 狙击镜 ADS 时 FOV
+@export var ads_speed: float = 10.0          ## ADS 进/出 插值速度
+@export var ads_move_mult: float = 0.55      ## ADS 时移动速度倍率
+@export var ads_spread_mult: float = 0.3     ## ADS 时扩散倍率
+@export var ads_sensitivity_mult: float = 0.6 ## ADS 时鼠标灵敏度倍率
+@export var ads_sniper_sensitivity: float = 0.35 ## 狙击镜 ADS 灵敏度倍率
+
 @export_group("Sprint")
 @export var sprint_can_shoot: bool = false   ## 奔跑时是否允许开枪
 @export var sprint_stamina_max: float = 5.0  ## 耐力上限（秒）
@@ -63,13 +72,13 @@ const QUICK_SLOT_IDS: Array[StringName] = [
 @export var landing_impact_speed: float = 6.0       ## 落地冲击传导给镜头的速度系数
 
 @export_group("Recoil")
-@export var recoil_vertical: float = 1.2         ## 每发上抬角度（度）
-@export var recoil_horizontal: float = 0.3       ## 每发随机水平偏移范围（度）
-@export var recoil_recovery_speed: float = 8.0   ## 后坐力恢复速度
-@export var recoil_max_vertical: float = 8.0     ## 最大累计垂直后坐力（度）
-@export var recoil_kick_pos: float = 0.025       ## 枪械向后位移量
-@export var recoil_kick_rot: float = 8.0         ## 枪械旋转踢脚角度（度）
-
+@export var recoil_vertical: float = 1.5         ## 每发上抬角度（度）— Marathon 风格较强
+@export var recoil_horizontal: float = 0.4       ## 每发随机水平偏移范围（度）
+@export var recoil_recovery_speed: float = 12.0  ## 后坐力恢复速度（快恢复 = 手感干脆）
+@export var recoil_max_vertical: float = 10.0    ## 最大累计垂直后坐力（度）
+@export var recoil_kick_pos: float = 0.035       ## 枪械向后位移量（更有冲击感）
+@export var recoil_kick_rot: float = 10.0        ## 枪械旋转踢脚角度（度）
+@export var jam_kick_rot: float = 15.0           ## 卡壳时枪械旋转角度（度）
 
 @export_group("Spread / Accuracy")
 @export var spread_base: float = 0.0           ## 静止精度偏移（单位：米，以30m处为基准）
@@ -154,6 +163,12 @@ var _shake_duration: float = 0.0
 var _shake_timer: float = 0.0
 var _shake_offset: Vector3 = Vector3.ZERO
 
+# ADS（瞄准镜）
+var is_aiming: bool = false
+var ads_alpha: float = 0.0          # 0=hip, 1=fully ADS
+var _current_weapon_id: StringName = &""
+var _scope_overlay: ColorRect = null  # 狙击镜黑边遮罩
+
 # ─────────────────────────────────────────────
 # 信号
 # ─────────────────────────────────────────────
@@ -180,13 +195,17 @@ func _ready() -> void:
 	_equip_quick_slot(2)
 
 # ─────────────────────────────────────────────
-# 枪械构建（加载 GLB 资产）
+# 枪械构建（Marathon 风格大枪 + ADS 支持）
 # ─────────────────────────────────────────────
+# Hip-fire 位置（枪在画面右下角，占屏幕 ~30-35%）
+const GUN_HIP_POS := Vector3(0.32, -0.28, -0.50)
+# ADS 位置（枪居中对齐准星）
+const GUN_ADS_POS := Vector3(0.0, -0.16, -0.42)
+
 func _build_gun() -> void:
 	gun_pivot = Node3D.new()
 	gun_pivot.name = "GunPivot"
-	# 位置：右侧、偏下、靠近相机
-	gun_pivot.position = Vector3(0.25, -0.22, -0.45)
+	gun_pivot.position = GUN_HIP_POS
 	camera.add_child(gun_pivot)
 	bob_origin = gun_pivot.position
 
@@ -195,24 +214,29 @@ func _build_gun() -> void:
 
 	# 手臂（保持程序化，与任何枪械通用）
 	var arm_l := MeshInstance3D.new()
+	arm_l.name = "ArmL"
 	var arm_mesh_l := CapsuleMesh.new()
-	arm_mesh_l.radius = 0.04
-	arm_mesh_l.height = 0.28
+	arm_mesh_l.radius = 0.05
+	arm_mesh_l.height = 0.34
 	arm_l.mesh = arm_mesh_l
 	arm_l.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.75, 0.55, 0.42)))
 	arm_l.rotation_degrees = Vector3(70, 10, 10)
-	arm_l.position = Vector3(0.05, -0.22, -0.1)
+	arm_l.position = Vector3(0.08, -0.28, -0.08)
 	camera.add_child(arm_l)
 
 	var arm_r := MeshInstance3D.new()
+	arm_r.name = "ArmR"
 	var arm_mesh_r := CapsuleMesh.new()
-	arm_mesh_r.radius = 0.04
-	arm_mesh_r.height = 0.28
+	arm_mesh_r.radius = 0.05
+	arm_mesh_r.height = 0.34
 	arm_r.mesh = arm_mesh_r
 	arm_r.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.75, 0.55, 0.42)))
 	arm_r.rotation_degrees = Vector3(70, -10, -10)
-	arm_r.position = Vector3(0.35, -0.22, -0.1)
+	arm_r.position = Vector3(0.44, -0.28, -0.08)
 	camera.add_child(arm_r)
+
+	# 创建狙击镜黑边遮罩（默认隐藏）
+	_build_scope_overlay()
 
 ## 根据武器 ID 程序化构建不同外形的枪
 func _build_procedural_gun(weapon_id: StringName) -> void:
@@ -239,39 +263,38 @@ func _build_procedural_gun(weapon_id: StringName) -> void:
 ## ── Misriah 2442：工业泵动散弹枪，粗短枪管、大口径、MIPS弹药 ──
 func _make_gun_shotgun() -> void:
 	var col := Color(0.55, 0.35, 0.15)
-	# 枪身（宽胖方块）
 	var body := MeshInstance3D.new()
 	body.name = "Body"
 	var bm := BoxMesh.new()
-	bm.size = Vector3(0.07, 0.09, 0.22)
+	bm.size = Vector3(0.16, 0.20, 0.50)
 	body.mesh = bm
 	body.set_surface_override_material(0, PSXManager.make_psx_material(col))
 	gun_pivot.add_child(body)
 	# 粗短枪管
 	var barrel := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
-	cm.top_radius = 0.025
-	cm.bottom_radius = 0.025
-	cm.height = 0.12
+	cm.top_radius = 0.055
+	cm.bottom_radius = 0.055
+	cm.height = 0.28
 	barrel.mesh = cm
 	barrel.rotation_degrees = Vector3(90, 0, 0)
-	barrel.position = Vector3(0, 0.01, -0.17)
+	barrel.position = Vector3(0, 0.02, -0.39)
 	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.08, 0.08, 0.08)))
 	gun_pivot.add_child(barrel)
 	# 泵（滑轨）
 	var pump := MeshInstance3D.new()
 	var pm := BoxMesh.new()
-	pm.size = Vector3(0.04, 0.04, 0.1)
+	pm.size = Vector3(0.09, 0.09, 0.22)
 	pump.mesh = pm
-	pump.position = Vector3(0, -0.03, -0.08)
+	pump.position = Vector3(0, -0.06, -0.18)
 	pump.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.3, 0.15, 0.05)))
 	gun_pivot.add_child(pump)
 	# 握把
 	var grip := MeshInstance3D.new()
 	var gm := BoxMesh.new()
-	gm.size = Vector3(0.04, 0.1, 0.04)
+	gm.size = Vector3(0.09, 0.22, 0.09)
 	grip.mesh = gm
-	grip.position = Vector3(0, -0.08, 0.06)
+	grip.position = Vector3(0, -0.18, 0.13)
 	grip.rotation_degrees = Vector3(-15, 0, 0)
 	grip.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.4)))
 	gun_pivot.add_child(grip)
@@ -280,47 +303,46 @@ func _make_gun_shotgun() -> void:
 ## ── BRRT Compact：方块弹匣顶部弹出的紧凑SMG ──
 func _make_gun_smg() -> void:
 	var col := Color(0.25, 0.45, 0.55)
-	# 机匣（短小）
 	var body := MeshInstance3D.new()
 	body.name = "Body"
 	var bm := BoxMesh.new()
-	bm.size = Vector3(0.05, 0.07, 0.18)
+	bm.size = Vector3(0.11, 0.16, 0.40)
 	body.mesh = bm
 	body.set_surface_override_material(0, PSXManager.make_psx_material(col))
 	gun_pivot.add_child(body)
 	# 短枪管
 	var barrel := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
-	cm.top_radius = 0.012
-	cm.bottom_radius = 0.012
-	cm.height = 0.1
+	cm.top_radius = 0.025
+	cm.bottom_radius = 0.025
+	cm.height = 0.22
 	barrel.mesh = cm
 	barrel.rotation_degrees = Vector3(90, 0, 0)
-	barrel.position = Vector3(0, 0, -0.14)
+	barrel.position = Vector3(0, 0, -0.31)
 	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.08, 0.08, 0.08)))
 	gun_pivot.add_child(barrel)
 	# 长弹匣（向下突出）
 	var mag := MeshInstance3D.new()
 	var mm := BoxMesh.new()
-	mm.size = Vector3(0.025, 0.12, 0.035)
+	mm.size = Vector3(0.055, 0.26, 0.08)
 	mag.mesh = mm
-	mag.position = Vector3(0, -0.08, -0.02)
+	mag.position = Vector3(0, -0.18, -0.04)
 	mag.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.3)))
 	gun_pivot.add_child(mag)
-	# 折叠枪托（小方块）
+	# 折叠枪托
 	var stock := MeshInstance3D.new()
 	var sm := BoxMesh.new()
-	sm.size = Vector3(0.03, 0.05, 0.06)
+	sm.size = Vector3(0.07, 0.11, 0.13)
 	stock.mesh = sm
-	stock.position = Vector3(0, -0.01, 0.12)
+	stock.position = Vector3(0, -0.02, 0.26)
 	stock.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.2)))
 	gun_pivot.add_child(stock)
 	# 握把
 	var grip := MeshInstance3D.new()
 	var gm := BoxMesh.new()
-	gm.size = Vector3(0.035, 0.08, 0.035)
+	gm.size = Vector3(0.08, 0.18, 0.08)
 	grip.mesh = gm
-	grip.position = Vector3(0, -0.07, 0.05)
+	grip.position = Vector3(0, -0.16, 0.11)
 	grip.rotation_degrees = Vector3(-12, 0, 0)
 	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.12, 0.12, 0.12)))
 	gun_pivot.add_child(grip)
@@ -329,56 +351,55 @@ func _make_gun_smg() -> void:
 ## ── M77 Overrun：Bullpup突击步枪，弹匣在后方 ──
 func _make_gun_ar() -> void:
 	var col := Color(0.22, 0.35, 0.28)
-	# 机匣
 	var body := MeshInstance3D.new()
 	body.name = "Body"
 	var bm := BoxMesh.new()
-	bm.size = Vector3(0.05, 0.07, 0.26)
+	bm.size = Vector3(0.11, 0.16, 0.58)
 	body.mesh = bm
 	body.set_surface_override_material(0, PSXManager.make_psx_material(col))
 	gun_pivot.add_child(body)
 	# 枪管
 	var barrel := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
-	cm.top_radius = 0.012
-	cm.bottom_radius = 0.014
-	cm.height = 0.16
+	cm.top_radius = 0.025
+	cm.bottom_radius = 0.030
+	cm.height = 0.36
 	barrel.mesh = cm
 	barrel.rotation_degrees = Vector3(90, 0, 0)
-	barrel.position = Vector3(0, 0.005, -0.21)
+	barrel.position = Vector3(0, 0.01, -0.47)
 	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.08, 0.08, 0.08)))
 	gun_pivot.add_child(barrel)
 	# 护手（包裹枪管）
 	var guard := MeshInstance3D.new()
 	var guardm := BoxMesh.new()
-	guardm.size = Vector3(0.04, 0.05, 0.12)
+	guardm.size = Vector3(0.09, 0.11, 0.26)
 	guard.mesh = guardm
-	guard.position = Vector3(0, -0.01, -0.15)
+	guard.position = Vector3(0, -0.02, -0.34)
 	guard.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.15)))
 	gun_pivot.add_child(guard)
 	# 弹匣
 	var mag := MeshInstance3D.new()
 	var mm := BoxMesh.new()
-	mm.size = Vector3(0.025, 0.1, 0.03)
+	mm.size = Vector3(0.055, 0.22, 0.065)
 	mag.mesh = mm
-	mag.position = Vector3(0, -0.07, 0.0)
+	mag.position = Vector3(0, -0.16, 0.0)
 	mag.rotation_degrees = Vector3(-5, 0, 0)
 	mag.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.4)))
 	gun_pivot.add_child(mag)
 	# 枪托
 	var stock := MeshInstance3D.new()
 	var sm := BoxMesh.new()
-	sm.size = Vector3(0.04, 0.06, 0.1)
+	sm.size = Vector3(0.09, 0.13, 0.22)
 	stock.mesh = sm
-	stock.position = Vector3(0, -0.005, 0.18)
+	stock.position = Vector3(0, -0.01, 0.40)
 	stock.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.2)))
 	gun_pivot.add_child(stock)
 	# 握把
 	var grip := MeshInstance3D.new()
 	var gm := BoxMesh.new()
-	gm.size = Vector3(0.035, 0.08, 0.035)
+	gm.size = Vector3(0.08, 0.18, 0.08)
 	grip.mesh = gm
-	grip.position = Vector3(0, -0.07, 0.06)
+	grip.position = Vector3(0, -0.16, 0.13)
 	grip.rotation_degrees = Vector3(-12, 0, 0)
 	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.1, 0.1, 0.1)))
 	gun_pivot.add_child(grip)
@@ -387,58 +408,57 @@ func _make_gun_ar() -> void:
 ## ── Repeater HPR：长枪管精确步枪，瞄准镜，Heavy弹药 ──
 func _make_gun_dmr() -> void:
 	var col := Color(0.35, 0.28, 0.18)
-	# 枪身（长）
 	var body := MeshInstance3D.new()
 	body.name = "Body"
 	var bm := BoxMesh.new()
-	bm.size = Vector3(0.045, 0.065, 0.3)
+	bm.size = Vector3(0.10, 0.14, 0.66)
 	body.mesh = bm
 	body.set_surface_override_material(0, PSXManager.make_psx_material(col))
 	gun_pivot.add_child(body)
 	# 长枪管
 	var barrel := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
-	cm.top_radius = 0.01
-	cm.bottom_radius = 0.012
-	cm.height = 0.22
+	cm.top_radius = 0.020
+	cm.bottom_radius = 0.025
+	cm.height = 0.48
 	barrel.mesh = cm
 	barrel.rotation_degrees = Vector3(90, 0, 0)
-	barrel.position = Vector3(0, 0.005, -0.26)
+	barrel.position = Vector3(0, 0.01, -0.57)
 	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.06, 0.06, 0.06)))
 	gun_pivot.add_child(barrel)
 	# 瞄准镜（圆筒）
 	var scope := MeshInstance3D.new()
 	var scopem := CylinderMesh.new()
-	scopem.top_radius = 0.018
-	scopem.bottom_radius = 0.018
-	scopem.height = 0.1
+	scopem.top_radius = 0.038
+	scopem.bottom_radius = 0.038
+	scopem.height = 0.22
 	scope.mesh = scopem
 	scope.rotation_degrees = Vector3(90, 0, 0)
-	scope.position = Vector3(0, 0.05, -0.04)
+	scope.position = Vector3(0, 0.11, -0.09)
 	scope.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.05, 0.05, 0.05)))
 	gun_pivot.add_child(scope)
 	# 小弹匣
 	var mag := MeshInstance3D.new()
 	var mm := BoxMesh.new()
-	mm.size = Vector3(0.022, 0.08, 0.025)
+	mm.size = Vector3(0.048, 0.18, 0.055)
 	mag.mesh = mm
-	mag.position = Vector3(0, -0.06, 0.0)
+	mag.position = Vector3(0, -0.13, 0.0)
 	mag.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.4)))
 	gun_pivot.add_child(mag)
 	# 枪托
 	var stock := MeshInstance3D.new()
 	var sm := BoxMesh.new()
-	sm.size = Vector3(0.04, 0.07, 0.12)
+	sm.size = Vector3(0.09, 0.15, 0.26)
 	stock.mesh = sm
-	stock.position = Vector3(0, -0.005, 0.21)
+	stock.position = Vector3(0, -0.01, 0.46)
 	stock.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.25)))
 	gun_pivot.add_child(stock)
 	# 握把
 	var grip := MeshInstance3D.new()
 	var gm := BoxMesh.new()
-	gm.size = Vector3(0.03, 0.07, 0.03)
+	gm.size = Vector3(0.065, 0.15, 0.065)
 	grip.mesh = gm
-	grip.position = Vector3(0, -0.065, 0.07)
+	grip.position = Vector3(0, -0.14, 0.15)
 	grip.rotation_degrees = Vector3(-15, 0, 0)
 	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.1, 0.1, 0.1)))
 	gun_pivot.add_child(grip)
@@ -447,84 +467,83 @@ func _make_gun_dmr() -> void:
 ## ── V99 Channel Rifle：Volt能量狙击，方形电池弹匣，蓝色发光元素 ──
 func _make_gun_sniper() -> void:
 	var col := Color(0.15, 0.3, 0.55)
-	var glow := Color(0.3, 0.6, 1.0)  # Volt blue glow
-	# 枪身（方正 Volt 风格）
+	var glow := Color(0.3, 0.6, 1.0)
 	var body := MeshInstance3D.new()
 	body.name = "Body"
 	var bm := BoxMesh.new()
-	bm.size = Vector3(0.05, 0.065, 0.34)
+	bm.size = Vector3(0.11, 0.14, 0.75)
 	body.mesh = bm
 	body.set_surface_override_material(0, PSXManager.make_psx_material(col))
 	gun_pivot.add_child(body)
-	# 超长枪管（细长发光管）
+	# 超长枪管
 	var barrel := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
-	cm.top_radius = 0.012
-	cm.bottom_radius = 0.014
-	cm.height = 0.26
+	cm.top_radius = 0.025
+	cm.bottom_radius = 0.030
+	cm.height = 0.57
 	barrel.mesh = cm
 	barrel.rotation_degrees = Vector3(90, 0, 0)
-	barrel.position = Vector3(0, 0.005, -0.3)
+	barrel.position = Vector3(0, 0.01, -0.66)
 	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.05, 0.05, 0.08)))
 	gun_pivot.add_child(barrel)
 	# 能量发射口（蓝色发光环）
-	var muzzle := MeshInstance3D.new()
+	var muzzle_ring := MeshInstance3D.new()
 	var mzm := CylinderMesh.new()
-	mzm.top_radius = 0.02
-	mzm.bottom_radius = 0.02
-	mzm.height = 0.015
-	muzzle.mesh = mzm
-	muzzle.rotation_degrees = Vector3(90, 0, 0)
-	muzzle.position = Vector3(0, 0.005, -0.44)
-	muzzle.set_surface_override_material(0, PSXManager.make_psx_material(glow))
-	gun_pivot.add_child(muzzle)
-	# Volt 电池弹匣（方形扁平，侧面插入）
+	mzm.top_radius = 0.042
+	mzm.bottom_radius = 0.042
+	mzm.height = 0.03
+	muzzle_ring.mesh = mzm
+	muzzle_ring.rotation_degrees = Vector3(90, 0, 0)
+	muzzle_ring.position = Vector3(0, 0.01, -0.96)
+	muzzle_ring.set_surface_override_material(0, PSXManager.make_psx_material(glow))
+	gun_pivot.add_child(muzzle_ring)
+	# Volt 电池弹匣
 	var battery := MeshInstance3D.new()
 	var batm := BoxMesh.new()
-	batm.size = Vector3(0.06, 0.04, 0.12)
+	batm.size = Vector3(0.13, 0.085, 0.26)
 	battery.mesh = batm
-	battery.position = Vector3(0, -0.04, 0.02)
+	battery.position = Vector3(0, -0.085, 0.04)
 	battery.set_surface_override_material(0, PSXManager.make_psx_material(glow.darkened(0.5)))
 	gun_pivot.add_child(battery)
 	# 电池发光条
 	var bat_glow := MeshInstance3D.new()
 	var bglm := BoxMesh.new()
-	bglm.size = Vector3(0.062, 0.008, 0.1)
+	bglm.size = Vector3(0.135, 0.016, 0.22)
 	bat_glow.mesh = bglm
-	bat_glow.position = Vector3(0, -0.04, 0.02)
+	bat_glow.position = Vector3(0, -0.085, 0.04)
 	bat_glow.set_surface_override_material(0, PSXManager.make_psx_material(glow))
 	gun_pivot.add_child(bat_glow)
 	# 大型瞄准镜（方形 Volt 风格）
 	var scope := MeshInstance3D.new()
 	var scopem := BoxMesh.new()
-	scopem.size = Vector3(0.035, 0.035, 0.12)
+	scopem.size = Vector3(0.075, 0.075, 0.26)
 	scope.mesh = scopem
-	scope.position = Vector3(0, 0.05, -0.06)
+	scope.position = Vector3(0, 0.11, -0.13)
 	scope.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.04, 0.04, 0.06)))
 	gun_pivot.add_child(scope)
 	# 镜片（蓝色发光）
 	var lens := MeshInstance3D.new()
 	var lensm := BoxMesh.new()
-	lensm.size = Vector3(0.028, 0.028, 0.005)
+	lensm.size = Vector3(0.06, 0.06, 0.01)
 	lens.mesh = lensm
-	lens.position = Vector3(0, 0.05, -0.122)
+	lens.position = Vector3(0, 0.11, -0.265)
 	lens.set_surface_override_material(0, PSXManager.make_psx_material(glow))
 	gun_pivot.add_child(lens)
 	# 枪托（方正 Volt 风格）
 	var stock := MeshInstance3D.new()
 	var sm := BoxMesh.new()
-	sm.size = Vector3(0.04, 0.07, 0.12)
+	sm.size = Vector3(0.09, 0.15, 0.26)
 	stock.mesh = sm
-	stock.position = Vector3(0, -0.005, 0.23)
+	stock.position = Vector3(0, -0.01, 0.50)
 	stock.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.2)))
 	gun_pivot.add_child(stock)
 	# 散热片（侧面蓝色条纹）
 	for side in [-1.0, 1.0]:
 		var fin := MeshInstance3D.new()
 		var finm := BoxMesh.new()
-		finm.size = Vector3(0.004, 0.03, 0.08)
+		finm.size = Vector3(0.008, 0.065, 0.18)
 		fin.mesh = finm
-		fin.position = Vector3(0.028 * side, 0.02, -0.1)
+		fin.position = Vector3(0.06 * side, 0.04, -0.22)
 		fin.set_surface_override_material(0, PSXManager.make_psx_material(glow.darkened(0.3)))
 		gun_pivot.add_child(fin)
 	gun_mesh = body
@@ -534,10 +553,13 @@ func _make_gun_sniper() -> void:
 # ─────────────────────────────────────────────
 func _input(event: InputEvent) -> void:
 	if inventory_open:
-		return  # block look/escape while inventory is open
+		return
 	if event is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
-		rotate_y(-event.relative.x * mouse_sensitivity)
-		head.rotate_x(-event.relative.y * mouse_sensitivity)
+		var sens := mouse_sensitivity
+		if is_aiming:
+			sens *= ads_sniper_sensitivity if _is_sniper() else ads_sensitivity_mult
+		rotate_y(-event.relative.x * sens)
+		head.rotate_x(-event.relative.y * sens)
 		head.rotation.x = clamp(head.rotation.x, deg_to_rad(-85), deg_to_rad(85))
 	if event.is_action_pressed("ui_cancel"):
 		if Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
@@ -559,6 +581,7 @@ func _process(delta: float) -> void:
 	_tick_shoot_timer(delta)
 	_tick_reload(delta)
 	_handle_action_input()
+	_update_ads(delta)
 	_update_crouch(delta)
 	_update_weapon_bob(delta)
 	_update_recoil(delta)
@@ -619,11 +642,14 @@ func _can_stand_up() -> bool:
 	return space.intersect_ray(params).is_empty()
 
 # ─────────────────────────────────────────────
-# FOV（奔跑时拉宽）
+# FOV（奔跑拉宽 / ADS 缩窄）
 # ─────────────────────────────────────────────
 func _update_fov(delta: float) -> void:
-	var speeding := is_sprinting() and velocity.length() > walk_speed * 0.8
-	var target_fov := base_fov + sprint_fov_bonus if speeding else base_fov
+	var target_fov := base_fov
+	if is_aiming:
+		target_fov = ads_sniper_fov if _is_sniper() else ads_fov
+	elif is_sprinting() and velocity.length() > walk_speed * 0.8:
+		target_fov = base_fov + sprint_fov_bonus
 	camera.fov = lerp(camera.fov, target_fov, delta * fov_lerp_speed)
 
 # ─────────────────────────────────────────────
@@ -648,13 +674,18 @@ func _update_weapon_bob(delta: float) -> void:
 			freq = bob_freq_walk
 			amp_mult = 1.0
 
+		# ADS 时大幅减少武器晃动
+		if is_aiming:
+			amp_mult *= 0.15
+			freq *= 0.6
+
 		bob_time += delta * freq
 		var bx: float = sin(bob_time) * bob_amp_x * amp_mult
 		var by: float = absf(sin(bob_time)) * bob_amp_y * amp_mult
 		gun_pivot.position = bob_origin + Vector3(bx, by, 0)
 
-		# 奔跑侧倾
-		if sprinting:
+		# 奔跑侧倾（ADS 时不侧倾）
+		if sprinting and not is_aiming:
 			var tilt := sin(bob_time * 0.5) * head_tilt_angle
 			camera.rotation_degrees.z = lerp(camera.rotation_degrees.z, tilt, delta * 6.0)
 		else:
@@ -678,6 +709,10 @@ func _update_weapon_bob(delta: float) -> void:
 func _apply_recoil() -> void:
 	var v_kick := recoil_vertical
 	var h_kick := randf_range(-recoil_horizontal, recoil_horizontal)
+	# ADS 时后坐力减半
+	if is_aiming:
+		v_kick *= 0.5
+		h_kick *= 0.4
 	# 直接立刻旋转摄像机（瞬时踢）
 	head.rotation.x -= deg_to_rad(v_kick)
 	head.rotation.x = clamp(head.rotation.x, deg_to_rad(-85), deg_to_rad(85))
@@ -714,6 +749,9 @@ func _get_current_spread() -> float:
 	elif velocity.length() > 0.5:
 		s += spread_move
 	s += current_spread
+	# ADS 大幅减少扩散
+	if is_aiming:
+		s *= ads_spread_mult
 	return s
 
 # ─────────────────────────────────────────────
@@ -771,6 +809,8 @@ func _apply_movement(delta: float) -> void:
 		target_speed = crouch_speed
 	elif is_sprinting():
 		target_speed = sprint_speed
+	elif is_aiming:
+		target_speed = walk_speed * ads_move_mult
 	else:
 		target_speed = walk_speed
 
@@ -946,6 +986,16 @@ func _spawn_hit_particles(hit_pos: Vector3, hit_normal: Vector3) -> void:
 func equip_weapon(item: Resource) -> void:
 	if item == null or item.category != ItemDataRes.Category.WEAPON:
 		return
+	# 退出 ADS
+	is_aiming = false
+	ads_alpha = 0.0
+	_show_scope_overlay(false)
+	if gun_pivot:
+		gun_pivot.visible = true
+	var arm_l := camera.get_node_or_null("ArmL")
+	var arm_r := camera.get_node_or_null("ArmR")
+	if arm_l: arm_l.visible = true
+	if arm_r: arm_r.visible = true
 	# Update gun stats from item data
 	damage_per_shot = item.damage
 	shoot_cooldown = item.fire_rate
@@ -958,12 +1008,14 @@ func equip_weapon(item: Resource) -> void:
 	is_reloading = false
 	can_shoot = true
 	equipped_weapon_name = item.display_name
+	_current_weapon_id = item.id
 	ammo_changed.emit(current_ammo, magazine_size)
 	weapon_changed.emit(equipped_weapon_name, item.weapon_slot if "weapon_slot" in item else 0)
 	# Update raycast length
 	if raycast:
 		raycast.target_position = Vector3(0, 0, -raycast_range)
 	# Rebuild gun mesh based on weapon ID
+	bob_origin = GUN_HIP_POS
 	_build_procedural_gun(item.id)
 	# ── Weapon equip animation: pull up from below ──
 	_play_equip_anim()
@@ -981,6 +1033,133 @@ func _play_equip_anim() -> void:
 	tw.tween_property(gun_pivot, "position", bob_origin, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	tw.parallel().tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.3).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(func(): can_shoot = true)
+
+# ─────────────────────────────────────────────
+# ADS（瞄准镜）系统
+# ─────────────────────────────────────────────
+func _update_ads(delta: float) -> void:
+	# 奔跑 / 换弹 / 卡壳时自动退出 ADS
+	var want_aim := Input.is_action_pressed("aim") and not is_sprinting() \
+		and not is_reloading and not is_jammed and not inventory_open
+	is_aiming = want_aim
+
+	# 平滑插值 ads_alpha (0→1)
+	var target_alpha := 1.0 if is_aiming else 0.0
+	ads_alpha = move_toward(ads_alpha, target_alpha, delta * ads_speed)
+
+	# 插值枪械位置：hip → ADS center
+	if gun_pivot and not _is_tween_active():
+		var target_pos := GUN_HIP_POS.lerp(GUN_ADS_POS, ads_alpha)
+		# 只在非 bob 动画时更新 bob_origin，bob 动画会自己处理
+		bob_origin = target_pos
+
+	# 狙击镜特殊处理：高倍率 ADS 时显示黑边遮罩 + 隐藏枪模
+	if _is_sniper():
+		var sniper_threshold := 0.85
+		if ads_alpha > sniper_threshold:
+			_show_scope_overlay(true)
+			if gun_pivot:
+				gun_pivot.visible = false
+			# 隐藏手臂
+			var arm_l := camera.get_node_or_null("ArmL")
+			var arm_r := camera.get_node_or_null("ArmR")
+			if arm_l: arm_l.visible = false
+			if arm_r: arm_r.visible = false
+		else:
+			_show_scope_overlay(false)
+			if gun_pivot:
+				gun_pivot.visible = true
+			var arm_l := camera.get_node_or_null("ArmL")
+			var arm_r := camera.get_node_or_null("ArmR")
+			if arm_l: arm_l.visible = true
+			if arm_r: arm_r.visible = true
+	else:
+		_show_scope_overlay(false)
+
+func _is_sniper() -> bool:
+	return _current_weapon_id == &"sniper_disc"
+
+func _is_tween_active() -> bool:
+	# 检查是否有活跃的 equip/kick/reload tween（避免与 ADS 位置冲突）
+	return false  # tweens 会自动设置 gun_pivot.position，ADS 通过 bob_origin 驱动
+
+## 创建狙击镜黑边遮罩 UI
+func _build_scope_overlay() -> void:
+	# 使用 CanvasLayer 确保总在最上层
+	var canvas := CanvasLayer.new()
+	canvas.name = "ScopeCanvas"
+	canvas.layer = 90
+	add_child(canvas)
+
+	_scope_overlay = ColorRect.new()
+	_scope_overlay.name = "ScopeOverlay"
+	_scope_overlay.visible = false
+	_scope_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_scope_overlay.color = Color(0, 0, 0, 0)  # 初始透明
+	canvas.add_child(_scope_overlay)
+
+	# 中心圆形镜片区域（用一个简单的十字线标记）
+	var scope_cross_h := ColorRect.new()
+	scope_cross_h.name = "ScopeCrossH"
+	scope_cross_h.set_anchors_preset(Control.PRESET_CENTER)
+	scope_cross_h.size = Vector2(300, 1)
+	scope_cross_h.position = Vector2(-150, 0)
+	scope_cross_h.color = Color(0, 0, 0, 0.5)
+	_scope_overlay.add_child(scope_cross_h)
+
+	var scope_cross_v := ColorRect.new()
+	scope_cross_v.name = "ScopeCrossV"
+	scope_cross_v.set_anchors_preset(Control.PRESET_CENTER)
+	scope_cross_v.size = Vector2(1, 300)
+	scope_cross_v.position = Vector2(0, -150)
+	scope_cross_v.color = Color(0, 0, 0, 0.5)
+	_scope_overlay.add_child(scope_cross_v)
+
+	# 四边黑色遮罩（形成圆形视野效果）
+	for i in 4:
+		var mask := ColorRect.new()
+		mask.name = "ScopeMask%d" % i
+		mask.color = Color(0, 0, 0, 0.92)
+		_scope_overlay.add_child(mask)
+
+func _show_scope_overlay(show: bool) -> void:
+	if _scope_overlay == null:
+		return
+	_scope_overlay.visible = show
+	if show:
+		_scope_overlay.color = Color(0, 0, 0, 0.85)
+		# 调整遮罩大小形成圆形视野
+		var vp_size := get_viewport().get_visible_rect().size
+		var cx := vp_size.x * 0.5
+		var cy := vp_size.y * 0.5
+		var radius := min(cx, cy) * 0.38
+		# 上下左右遮罩
+		var masks: Array[ColorRect] = []
+		for i in 4:
+			var m := _scope_overlay.get_node_or_null("ScopeMask%d" % i) as ColorRect
+			if m: masks.append(m)
+		if masks.size() == 4:
+			# 上
+			masks[0].position = Vector2(0, 0)
+			masks[0].size = Vector2(vp_size.x, cy - radius)
+			# 下
+			masks[1].position = Vector2(0, cy + radius)
+			masks[1].size = Vector2(vp_size.x, cy - radius)
+			# 左
+			masks[2].position = Vector2(0, cy - radius)
+			masks[2].size = Vector2(cx - radius, radius * 2)
+			# 右
+			masks[3].position = Vector2(cx + radius, cy - radius)
+			masks[3].size = Vector2(cx - radius, radius * 2)
+		# 更新十字线位置
+		var cross_h := _scope_overlay.get_node_or_null("ScopeCrossH") as ColorRect
+		var cross_v := _scope_overlay.get_node_or_null("ScopeCrossV") as ColorRect
+		if cross_h:
+			cross_h.position = Vector2(cx - 150, cy)
+			cross_h.color = Color(0, 0, 0, 0.6)
+		if cross_v:
+			cross_v.position = Vector2(cx, cy - 150)
+			cross_v.color = Color(0, 0, 0, 0.6)
 
 # ─────────────────────────────────────────────
 # 摄像机震动系统
