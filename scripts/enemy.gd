@@ -79,6 +79,17 @@ var _recent_damage_timer: float = 0.0 ## time since last damage taken
 var _nav_agent: NavigationAgent3D = null
 var _debug_label: Label3D = null
 
+# ── Procedural animation state ──
+var _walk_time: float = 0.0
+var _is_crouching_anim: bool = false
+var _crouch_blend: float = 0.0
+var _visual_nodes: Array[Node3D] = []
+const WALK_FREQ: float = 10.0
+const WALK_LEG_AMP: float = 0.45
+const WALK_ARM_AMP: float = 0.3
+const CROUCH_Y: float = -0.35
+const SPAWN_DUR: float = 0.35
+
 @onready var mesh: MeshInstance3D = $MeshInstance3D
 
 signal died(enemy: Node)
@@ -139,6 +150,18 @@ func _ready() -> void:
 		_debug_label.visible = true
 		_update_debug_label()
 
+	# ── Cache visual children for animations (exclude CollisionShape3D, NavAgent, Label) ──
+	for child in get_children():
+		if child is MeshInstance3D or child.name in ["GunPivot"]:
+			_visual_nodes.append(child)
+	# ── Spawn-in: scale visuals from zero (NOT the root — breaks collision) ──
+	for vn in _visual_nodes:
+		vn.scale = Vector3.ZERO
+	var spawn_tw := create_tween().set_parallel(true)
+	spawn_tw.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	for vn in _visual_nodes:
+		spawn_tw.tween_property(vn, "scale", Vector3.ONE, SPAWN_DUR)
+
 func get_state() -> State:
 	return state
 
@@ -185,6 +208,8 @@ func _physics_process(delta: float) -> void:
 			_state_flank(delta)
 
 	move_and_slide()
+	_animate_limbs(delta)
+	_animate_crouch(delta)
 	_update_debug_label()
 
 # ═════════════════════════════════════════════
@@ -464,6 +489,7 @@ func _fire_at_player() -> void:
 	_spawn_tracer(muzzle_pos, dir)
 	shot_fired_at.emit(muzzle_pos, dir)
 	_enemy_muzzle_flash()
+	_kick_enemy_gun()
 
 func _spawn_tracer(origin: Vector3, dir: Vector3) -> void:
 	var tracer := MeshInstance3D.new()
@@ -680,19 +706,24 @@ func _transition(new_state: State) -> void:
 	match new_state:
 		State.SEEK_COVER:
 			_no_cover_timer = 0.0
+			_is_crouching_anim = false
 		State.IN_COVER:
 			var time_mult := 1.5 if archetype == 2 else 1.0
 			_cover_timer = randf_range(min_cover_time, max_cover_time) * time_mult
+			_is_crouching_anim = true
 		State.PEEK_SHOOT:
 			_peek_timer = peek_duration
 			_burst_remaining = burst_count
 			_burst_timer = 0.0
+			_is_crouching_anim = false
 		State.ADVANCE:
 			_advance_shoot_timer = randf_range(0.3, 0.8)
+			_is_crouching_anim = false
 		State.RETREAT:
-			pass
+			_is_crouching_anim = true
 		State.FLANK:
 			_no_cover_timer = 0.0
+			_is_crouching_anim = false
 
 # ─────────────────────────────────────────────
 # Damage / Death
@@ -727,14 +758,70 @@ func _flash_hit() -> void:
 func _die() -> void:
 	is_dead = true
 	_release_cover()
-	# Unregister from squad
 	var sm = get_node_or_null("/root/SquadManager")
 	if sm:
 		sm.unregister_enemy(self)
 	died.emit(self)
-	var tween := create_tween()
-	tween.tween_property(self, "scale", Vector3.ZERO, 0.25)
+	# Scale down visual children only (not root — keeps physics intact for cleanup)
+	var tween := create_tween().set_parallel(true)
+	for vn in _visual_nodes:
+		if is_instance_valid(vn):
+			tween.tween_property(vn, "scale", Vector3.ZERO, 0.25)
+	tween.set_parallel(false)
 	tween.tween_callback(queue_free)
+
+# ─────────────────────────────────────────────
+# Procedural Animation
+# ─────────────────────────────────────────────
+func _animate_limbs(delta: float) -> void:
+	var leg_l := get_node_or_null("LegL") as Node3D
+	var leg_r := get_node_or_null("LegR") as Node3D
+	var arm_l := get_node_or_null("ArmL") as Node3D
+	var arm_r := get_node_or_null("ArmR") as Node3D
+	if leg_l == null:
+		return
+	var hvel := Vector2(velocity.x, velocity.z).length()
+	if hvel > 0.5:
+		_walk_time += delta * WALK_FREQ
+		var s := sin(_walk_time)
+		leg_l.rotation.x = s * WALK_LEG_AMP
+		leg_r.rotation.x = -s * WALK_LEG_AMP
+		if arm_l:
+			arm_l.rotation.x = -s * WALK_ARM_AMP
+		if arm_r:
+			arm_r.rotation.x = s * WALK_ARM_AMP
+	else:
+		_walk_time = 0.0
+		leg_l.rotation.x = lerp(leg_l.rotation.x, 0.0, delta * 8.0)
+		leg_r.rotation.x = lerp(leg_r.rotation.x, 0.0, delta * 8.0)
+		if arm_l:
+			arm_l.rotation.x = lerp(arm_l.rotation.x, 0.0, delta * 8.0)
+		if arm_r:
+			arm_r.rotation.x = lerp(arm_r.rotation.x, 0.0, delta * 8.0)
+
+func _animate_crouch(delta: float) -> void:
+	var target := 1.0 if _is_crouching_anim else 0.0
+	_crouch_blend = lerp(_crouch_blend, target, delta * 6.0)
+	for child_name in ["MeshInstance3D", "Head", "Helmet", "ArmL", "ArmR", "GunPivot"]:
+		var node := get_node_or_null(child_name) as Node3D
+		if node:
+			if not node.has_meta("_base_y"):
+				node.set_meta("_base_y", node.position.y)
+			var base_y: float = node.get_meta("_base_y")
+			node.position.y = base_y + CROUCH_Y * _crouch_blend
+
+func _kick_enemy_gun() -> void:
+	var gun := get_node_or_null("GunPivot") as Node3D
+	if gun == null:
+		return
+	var base_pos: Vector3 = gun.position
+	if gun.has_meta("_base_y"):
+		base_pos.y = gun.get_meta("_base_y") + CROUCH_Y * _crouch_blend
+	var tw := gun.create_tween()
+	tw.tween_property(gun, "position", base_pos + Vector3(0, 0.02, 0.04), 0.04)
+	tw.parallel().tween_property(gun, "rotation_degrees", Vector3(-8.0, 0, 0), 0.04)
+	tw.tween_property(gun, "position", base_pos, 0.1)
+	tw.parallel().tween_property(gun, "rotation_degrees", Vector3.ZERO, 0.1)
 
 # ─────────────────────────────────────────────
 # Helpers
