@@ -72,13 +72,13 @@ const QUICK_SLOT_IDS: Array[StringName] = [
 @export var landing_impact_speed: float = 6.0       ## 落地冲击传导给镜头的速度系数
 
 @export_group("Recoil")
-@export var recoil_vertical: float = 0.8         ## 每发镜头上抬角度（度）— 平滑施加
-@export var recoil_horizontal: float = 0.25      ## 每发随机水平偏移范围（度）
-@export var recoil_recovery_speed: float = 6.0   ## 后坐力恢复速度
-@export var recoil_max_vertical: float = 6.0     ## 最大累计垂直后坐力（度）
-@export var recoil_kick_pos: float = 0.03        ## 枪械模型向后位移量（纯视觉）
-@export var recoil_kick_rot: float = 4.0         ## 枪械模型旋转踢角度（纯视觉，度）
-@export var recoil_apply_speed: float = 20.0     ## 后坐力施加到镜头的速度（越大越跟手）
+@export var recoil_vertical: float = 1.8         ## 每发镜头上抬角度（度）
+@export var recoil_horizontal: float = 0.5       ## 每发随机水平偏移范围（度）
+@export var recoil_recovery_speed: float = 5.0   ## 后坐力恢复速度
+@export var recoil_max_vertical: float = 10.0    ## 最大累计垂直后坐力（度）
+@export var recoil_kick_pos: float = 0.04        ## 枪械模型向后位移量（纯视觉）
+@export var recoil_kick_rot: float = 5.0         ## 枪械模型旋转踢角度（纯视觉，度）
+@export var recoil_apply_speed: float = 15.0     ## 后坐力施加到镜头的速度
 @export var jam_kick_rot: float = 8.0            ## 卡壳时枪械旋转角度（度）
 
 @export_group("Spread / Accuracy")
@@ -201,12 +201,16 @@ func _ready() -> void:
 # ─────────────────────────────────────────────
 # 枪械构建（Marathon 风格大枪 + ADS 支持）
 # ─────────────────────────────────────────────
-# Hip-fire 位置（枪在画面右下角，占屏幕 ~30-35%）
+# Hip-fire 位置（枪在画面右下角）
 const GUN_HIP_POS := Vector3(0.32, -0.32, -0.50)
-# ADS 位置（枪居中偏下，瞄具顶端对齐准星）
-const GUN_ADS_POS := Vector3(0.0, -0.135, -0.38)
+# ADS 位置基准（X=0 居中，Z=-0.38 拉近）— Y 由各武器瞄具高度决定
+const GUN_ADS_X := 0.0
+const GUN_ADS_Z := -0.38
 
-## FPS 枪械用材质：关闭 PSX 顶点抖动（近距离 viewmodel 不需要抖动，否则会偏移/z-fight）
+# 当前武器的 ADS 位置（由 equip_weapon 计算）
+var _gun_ads_pos := Vector3(0.0, -0.135, -0.38)
+
+## FPS 枪械用材质：关闭 PSX 顶点抖动
 func _gun_mat(color: Color) -> ShaderMaterial:
 	return PSXManager.make_psx_material(color, null, 512.0, 0.0, 0.0, false)
 
@@ -883,9 +887,10 @@ func _update_weapon_bob(delta: float) -> void:
 		if _gun_tween and _gun_tween.is_running():
 			_gun_tween.kill()
 			_gun_tween = null
-		gun_pivot.position = GUN_ADS_POS
+			can_shoot = true  # tween 可能设了 can_shoot=false，这里恢复
+		gun_pivot.position = _gun_ads_pos
 		gun_pivot.rotation_degrees = Vector3.ZERO
-		bob_origin = GUN_ADS_POS
+		bob_origin = _gun_ads_pos
 		bob_time = 0.0
 		camera.rotation_degrees.z = lerp(camera.rotation_degrees.z, 0.0, delta * 10.0)
 		return
@@ -939,11 +944,19 @@ func _update_weapon_bob(delta: float) -> void:
 # 后坐力（平滑施加到镜头 + 枪模视觉踢）
 # ─────────────────────────────────────────────
 func _apply_recoil() -> void:
-	var v_kick := recoil_vertical
-	var h_kick := randf_range(-recoil_horizontal, recoil_horizontal)
-	# ADS 时后坐力减半
+	# 武器类型后坐力倍率
+	var mult: float = 1.0
+	match _current_weapon_id:
+		&"shotgun_cqc": mult = 2.5   # 散弹枪巨大后坐力
+		&"smg_short": mult = 0.5     # SMG 低后坐力高射速
+		&"ar_medium": mult = 1.0     # AR 基准
+		&"dmr_long": mult = 1.8      # DMR 强后坐力
+		&"sniper_disc": mult = 4.0   # 狙击枪极强后坐力
+	var v_kick := recoil_vertical * mult
+	var h_kick := randf_range(-recoil_horizontal, recoil_horizontal) * mult
+	# ADS 时后坐力减少
 	if is_aiming:
-		v_kick *= 0.5
+		v_kick *= 0.6
 		h_kick *= 0.4
 	# 累积到待施加队列（不直接旋转镜头，避免抖动）
 	_recoil_pending_v += v_kick
@@ -1108,12 +1121,14 @@ func _try_shoot() -> void:
 		hit_point = raycast.get_collision_point()
 		var collider := raycast.get_collider()
 		if collider and collider.is_in_group("enemies"):
+			# 判定爆头：命中点 Y > 敌人脚底 + 1.0（头部区域）
+			var is_headshot := hit_point.y > collider.global_position.y + 1.0
+			var final_damage := damage_per_shot * (3 if is_headshot else 1)
 			enemy_hit.emit(collider)
 			if collider.has_method("take_damage"):
-				collider.take_damage(damage_per_shot)
+				collider.take_damage(final_damage)
 			_spawn_hit_particles(hit_point, raycast.get_collision_normal())
 	else:
-		# 未命中：弹道终点为射线最远端
 		hit_point = camera.global_position + camera.global_basis * raycast.target_position
 
 	# 弹道 tracer
@@ -1298,6 +1313,15 @@ func equip_weapon(item: Resource) -> void:
 	can_shoot = true
 	equipped_weapon_name = item.display_name
 	_current_weapon_id = item.id
+	# 根据武器瞄具高度计算 ADS 位置（瞄具中心对齐屏幕中心 Y=0）
+	var ads_y: float = -0.135  # 默认（铁瞄）
+	match _current_weapon_id:
+		&"shotgun_cqc": ads_y = -0.143
+		&"smg_short": ads_y = -0.143
+		&"ar_medium": ads_y = -0.12   # 红点瞄具较矮
+		&"dmr_long": ads_y = -0.11    # 光学瞄准镜中心
+		&"sniper_disc": ads_y = -0.115
+	_gun_ads_pos = Vector3(GUN_ADS_X, ads_y, GUN_ADS_Z)
 	ammo_changed.emit(current_ammo, magazine_size)
 	weapon_changed.emit(equipped_weapon_name, item.weapon_slot if "weapon_slot" in item else 0)
 	# Update raycast length
@@ -1340,7 +1364,7 @@ func _update_ads(delta: float) -> void:
 
 	# 插值枪械位置：hip → ADS center
 	if gun_pivot and not _is_tween_active():
-		var target_pos := GUN_HIP_POS.lerp(GUN_ADS_POS, ads_alpha)
+		var target_pos := GUN_HIP_POS.lerp(_gun_ads_pos, ads_alpha)
 		# 只在非 bob 动画时更新 bob_origin，bob 动画会自己处理
 		bob_origin = target_pos
 
