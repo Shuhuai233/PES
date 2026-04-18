@@ -26,6 +26,10 @@ var _free_cam_speed: float = 15.0
 var _free_cam_yaw: float = 0.0
 var _free_cam_pitch: float = 0.0
 
+# ── Cached references (avoid per-frame get_node_or_null) ──
+var _sm_cache: Node = null
+var _sm_cache_checked: bool = false
+
 # ── Enemy debug overlay (2D, above PSX post-process) ──
 var _enemy_debug_layer: CanvasLayer = null
 var _enemy_debug_labels: Dictionary = {}  # enemy instance_id -> Label
@@ -175,14 +179,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_debug()
 		if event.keycode == KEY_G or event.physical_keycode == KEY_G:
 			_toggle_god_mode()
-
-func _input(event: InputEvent) -> void:
-	# Backup: also check in _input in case _unhandled_input doesn't fire
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_F3 or event.physical_keycode == KEY_F3:
-			_toggle_debug()
-		if event.keycode == KEY_G or event.physical_keycode == KEY_G:
-			_toggle_god_mode()
 		if event.keycode == KEY_F5 or event.physical_keycode == KEY_F5:
 			_toggle_free_cam()
 	# Free camera mouse look
@@ -191,23 +187,13 @@ func _input(event: InputEvent) -> void:
 		_free_cam_pitch -= event.relative.y * 0.002
 		_free_cam_pitch = clamp(_free_cam_pitch, -1.4, 1.4)
 
-var _f3_toggled_this_frame: bool = false
-var _god_toggled_this_frame: bool = false
-
 func _toggle_god_mode() -> void:
-	if _god_toggled_this_frame:
-		return
-	_god_toggled_this_frame = true
-	call_deferred("_reset_god_toggle")
 	_god_mode = not _god_mode
 	if _god_mode:
 		player_health = max_health
 		ui.update_health(player_health)
 	ui.show_god_mode(_god_mode)
 	print("[Debug] God Mode: %s" % ("ON" if _god_mode else "OFF"))
-
-func _reset_god_toggle() -> void:
-	_god_toggled_this_frame = false
 
 # ─────────────────────────────────────────────
 # Enemy debug overlay (2D CanvasLayer, renders ABOVE PSX post-process)
@@ -290,19 +276,12 @@ func _update_enemy_debug_overlay() -> void:
 			_enemy_debug_labels[eid].queue_free()
 		_enemy_debug_labels.erase(eid)
 func _toggle_debug() -> void:
-	# Prevent double-toggle from both _input and _unhandled_input
-	if _f3_toggled_this_frame:
-		return
-	_f3_toggled_this_frame = true
-	call_deferred("_reset_f3_toggle")
-
 	_debug_ai = not _debug_ai
 	var label_text: String = "ON" if _debug_ai else "OFF"
 	print("[Debug] AI debug overlay: %s  (enemies alive: %d)" % [label_text, get_tree().get_nodes_in_group("enemies").size()])
 	# Store in SquadManager so newly spawned enemies also show debug
-	var sm = get_node_or_null("/root/SquadManager")
-	if sm:
-		sm.debug_enabled = _debug_ai
+	if _sm_cache:
+		_sm_cache.debug_enabled = _debug_ai
 	# Toggle NavigationServer debug
 	NavigationServer3D.set_debug_enabled(_debug_ai)
 	# Toggle enemy labels on all currently alive enemies
@@ -481,9 +460,6 @@ func _clear_cover_debug() -> void:
 			node.queue_free()
 	_cover_debug_nodes.clear()
 
-func _reset_f3_toggle() -> void:
-	_f3_toggled_this_frame = false
-
 # ─────────────────────────────────────────────
 # Free Camera (F5)
 # ─────────────────────────────────────────────
@@ -536,9 +512,11 @@ func _process(_delta: float) -> void:
 	_process_free_cam(_delta)
 
 	# ── Pass player health to SquadManager ──
-	var sm = get_node_or_null("/root/SquadManager")
-	if sm and max_health > 0:
-		sm.player_health_ratio = float(player_health) / float(max_health)
+	if not _sm_cache_checked:
+		_sm_cache = get_node_or_null("/root/SquadManager")
+		_sm_cache_checked = true
+	if _sm_cache and max_health > 0:
+		_sm_cache.player_health_ratio = float(player_health) / float(max_health)
 
 	# ── Refresh cover debug colors every 0.5s ──
 	if _debug_ai and _cover_debug_nodes.size() > 0:
@@ -554,21 +532,22 @@ func _process(_delta: float) -> void:
 	var near_portal: bool = portal.player_inside
 	ui.update_extract_bar(portal.get_extract_progress(), near_portal)
 
-	# ── Tutorial detection ────────────────────
-	if player.velocity.length() > 0.5:
-		ui.notify_movement_detected()
-	if player.is_sprinting():
-		ui.notify_sprint_detected()
-	if not player.is_on_floor() and player.velocity.y > 0.5:
-		ui.notify_jump_detected()
-	if player.get_is_crouching():
-		ui.notify_crouch_detected()
-	if abs(player.head.rotation.x) > 0.05:
-		ui.notify_look_detected()
+	# ── Tutorial detection (skip if tutorial is complete) ────
+	if ui.current_step < ui.TutorialStep.COMPLETE:
+		if player.velocity.length() > 0.5:
+			ui.notify_movement_detected()
+		if player.is_sprinting():
+			ui.notify_sprint_detected()
+		if not player.is_on_floor() and player.velocity.y > 0.5:
+			ui.notify_jump_detected()
+		if player.get_is_crouching():
+			ui.notify_crouch_detected()
+		if abs(player.head.rotation.x) > 0.05:
+			ui.notify_look_detected()
 
-	var dist: float = player.global_position.distance_to(portal.global_position)
-	if dist < 5.0:
-		ui.notify_player_near_portal()
+		var dist: float = player.global_position.distance_to(portal.global_position)
+		if dist < 5.0:
+			ui.notify_player_near_portal()
 
 	ui.show_reload(player.is_reloading)
 

@@ -70,6 +70,11 @@ var kill_counter: Label
 var extract_bar_bg: ColorRect
 var extract_bar_fill: ColorRect
 var crosshair: Control
+var _ch_dot: ColorRect       ## 准星中心点（缓存，避免每帧重建）
+var _ch_top: ColorRect       ## 准星上线
+var _ch_bot: ColorRect       ## 准星下线
+var _ch_left: ColorRect      ## 准星左线
+var _ch_right: ColorRect     ## 准星右线
 var ads_vignette: ColorRect  # ADS 暗角
 var stamina_bar_bg: ColorRect
 var stamina_bar_fill: ColorRect
@@ -436,7 +441,7 @@ func _build_hud() -> void:
 	crosshair.offset_bottom = 20
 	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(crosshair)
-	_rebuild_crosshair(4.0)
+	_build_crosshair_nodes()
 
 	# ── ADS 暗角（默认透明，ADS 时渐显）──
 	ads_vignette = ColorRect.new()
@@ -502,29 +507,39 @@ func _build_hud() -> void:
 	panel_bg.add_child(step_indicator)
 
 # ─────────────────────────────────────────────
-# 准星（动态间距）
+# 准星（动态间距 — 复用节点，只更新 position）
 # ─────────────────────────────────────────────
-func _rebuild_crosshair(gap: float) -> void:
-	for c in crosshair.get_children():
-		c.queue_free()
+func _build_crosshair_nodes() -> void:
 	var thick := 3.0
 	var line_len := 12.0
 	var col := Color(1, 1, 1, 0.9)
+	var gap := 4.0
 	# 中心点
-	var dot := ColorRect.new(); dot.color = col; dot.size = Vector2(3, 3)
-	dot.position = Vector2(-1.5, -1.5); crosshair.add_child(dot)
-	# 四条线
-	var t := ColorRect.new(); t.color = col; t.size = Vector2(thick, line_len)
-	t.position = Vector2(-thick * 0.5, -gap - line_len); crosshair.add_child(t)
-	var b := ColorRect.new(); b.color = col; b.size = Vector2(thick, line_len)
-	b.position = Vector2(-thick * 0.5, gap); crosshair.add_child(b)
-	var l := ColorRect.new(); l.color = col; l.size = Vector2(line_len, thick)
-	l.position = Vector2(-gap - line_len, -thick * 0.5); crosshair.add_child(l)
-	var r := ColorRect.new(); r.color = col; r.size = Vector2(line_len, thick)
-	r.position = Vector2(gap, -thick * 0.5); crosshair.add_child(r)
+	_ch_dot = ColorRect.new(); _ch_dot.color = col; _ch_dot.size = Vector2(3, 3)
+	_ch_dot.position = Vector2(-1.5, -1.5); crosshair.add_child(_ch_dot)
+	# 上
+	_ch_top = ColorRect.new(); _ch_top.color = col; _ch_top.size = Vector2(thick, line_len)
+	_ch_top.position = Vector2(-thick * 0.5, -gap - line_len); crosshair.add_child(_ch_top)
+	# 下
+	_ch_bot = ColorRect.new(); _ch_bot.color = col; _ch_bot.size = Vector2(thick, line_len)
+	_ch_bot.position = Vector2(-thick * 0.5, gap); crosshair.add_child(_ch_bot)
+	# 左
+	_ch_left = ColorRect.new(); _ch_left.color = col; _ch_left.size = Vector2(line_len, thick)
+	_ch_left.position = Vector2(-gap - line_len, -thick * 0.5); crosshair.add_child(_ch_left)
+	# 右
+	_ch_right = ColorRect.new(); _ch_right.color = col; _ch_right.size = Vector2(line_len, thick)
+	_ch_right.position = Vector2(gap, -thick * 0.5); crosshair.add_child(_ch_right)
+
+func _update_crosshair_gap(gap: float) -> void:
+	var thick := 3.0
+	var line_len := 12.0
+	if _ch_top: _ch_top.position = Vector2(-thick * 0.5, -gap - line_len)
+	if _ch_bot: _ch_bot.position = Vector2(-thick * 0.5, gap)
+	if _ch_left: _ch_left.position = Vector2(-gap - line_len, -thick * 0.5)
+	if _ch_right: _ch_right.position = Vector2(gap, -thick * 0.5)
 
 func update_crosshair_spread(spread: float) -> void:
-	_rebuild_crosshair(4.0 + spread * 20.0)
+	_update_crosshair_gap(4.0 + spread * 20.0)
 
 ## ADS 视觉状态更新（每帧由 player_controller 调用）
 func update_ads_visuals(ads_alpha: float) -> void:

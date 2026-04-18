@@ -82,6 +82,12 @@ signal died(enemy: Node)
 signal damaged_player(amount: int, attacker_pos: Vector3)
 signal shot_fired_at(origin: Vector3, direction: Vector3)
 
+# ── Cached references ──
+var _sm: Node = null  ## SquadManager cached reference
+
+# ── Shared materials (avoid per-shot allocation) ──
+static var _tracer_mat: StandardMaterial3D = null
+
 # ─────────────────────────────────────────────
 # Init
 # ─────────────────────────────────────────────
@@ -90,10 +96,10 @@ func _ready() -> void:
 	health = max_health
 	_player = get_tree().get_first_node_in_group("player")
 
-	var sm = get_node_or_null("/root/SquadManager")
-	if sm:
-		sm.register_enemy(self)
-		fireteam = sm.assign_fireteam(self)
+	_sm = get_node_or_null("/root/SquadManager")
+	if _sm:
+		_sm.register_enemy(self)
+		fireteam = _sm.assign_fireteam(self)
 
 	_nav_agent = NavigationAgent3D.new()
 	_nav_agent.path_desired_distance = 0.8
@@ -119,7 +125,7 @@ func _ready() -> void:
 	var arch_names := ["RUSH", "STD", "HVY"]
 	print("[Enemy] Spawned %s FT:%d (HP:%d)" % [arch_names[archetype], fireteam, max_health])
 
-	if sm and sm.debug_enabled:
+	if _sm and _sm.debug_enabled:
 		_debug_label.visible = true
 
 func get_state() -> State:
@@ -136,8 +142,7 @@ func _physics_process(delta: float) -> void:
 		_player = get_tree().get_first_node_in_group("player")
 		velocity.x = 0.0; velocity.z = 0.0; move_and_slide(); return
 
-	var sm = get_node_or_null("/root/SquadManager")
-	if sm: sm.report_player_spotted(_player.global_position)
+	if _sm: _sm.report_player_spotted(_player.global_position)
 
 	_melee_cooldown = max(0.0, _melee_cooldown - delta)
 	_grenade_cooldown = max(0.0, _grenade_cooldown - delta)
@@ -158,10 +163,9 @@ func _physics_process(delta: float) -> void:
 
 # ═══════════════ SEEK_COVER ═══════════════
 func _state_seek_cover(delta: float) -> void:
-	var sm = get_node_or_null("/root/SquadManager")
 	# Rusher: after SETUP, go ADVANCE if teammates covering
-	if archetype == 0 and sm and not sm.is_setup_phase():
-		if sm.is_anyone_shooting():
+	if archetype == 0 and _sm and not _sm.is_setup_phase():
+		if _sm.is_anyone_shooting():
 			_bark("PUSHING!")
 			_transition(State.ADVANCE)
 			return
@@ -189,7 +193,7 @@ func _state_in_cover(delta: float) -> void:
 	velocity.x = move_toward(velocity.x, 0.0, speed * 4.0 * delta)
 	velocity.z = move_toward(velocity.z, 0.0, speed * 4.0 * delta)
 	_look_at_player()
-	var sm = get_node_or_null("/root/SquadManager")
+	var sm = _sm
 
 	# SETUP: just hide
 	if sm and sm.is_setup_phase(): return
@@ -261,7 +265,7 @@ func _state_peek_shoot(delta: float) -> void:
 		_fire_at_player(); _burst_remaining -= 1; _burst_timer = burst_interval
 	if _burst_remaining <= 0:
 		_peek_shoot_count += 1
-		var sm = get_node_or_null("/root/SquadManager")
+		var sm = _sm
 		if sm: sm.release_engagement_slot(self)
 		if archetype == 2 and _peek_shoot_count < 4:
 			_burst_remaining = burst_count; _burst_timer = 1.0
@@ -353,11 +357,12 @@ func _fire_at_player() -> void:
 func _spawn_tracer(origin: Vector3, dir: Vector3) -> void:
 	var tracer := MeshInstance3D.new()
 	var m := BoxMesh.new(); m.size = Vector3(0.02, 0.02, 0.8); tracer.mesh = m
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.9, 0.3, 0.9); mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.8, 0.2); mat.emission_energy_multiplier = 3.0
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; mat.no_depth_test = true
-	tracer.set_surface_override_material(0, mat)
+	if _tracer_mat == null:
+		_tracer_mat = StandardMaterial3D.new()
+		_tracer_mat.albedo_color = Color(1.0, 0.9, 0.3, 0.9); _tracer_mat.emission_enabled = true
+		_tracer_mat.emission = Color(1.0, 0.8, 0.2); _tracer_mat.emission_energy_multiplier = 3.0
+		_tracer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; _tracer_mat.no_depth_test = true
+	tracer.set_surface_override_material(0, _tracer_mat)
 	get_tree().current_scene.add_child(tracer)
 	tracer.global_position = origin; tracer.look_at(origin + dir, Vector3.UP)
 	var tween := tracer.create_tween()
@@ -509,9 +514,8 @@ func _evaluate_single_cover(cp: Node3D) -> float:
 	if dist_to_player > 6.0 and dist_to_player < 16.0: score += 5.0
 
 	# 5. Fireteam clustering
-	var sm = get_node_or_null("/root/SquadManager")
-	if sm:
-		var members: Array = sm.get_fireteam_members(fireteam)
+	if _sm:
+		var members: Array = _sm.get_fireteam_members(fireteam)
 		for ally in members:
 			if ally == self: continue
 			var ad := cp_pos.distance_to(ally.global_position)
@@ -589,8 +593,7 @@ func _flash_hit() -> void:
 
 func _die() -> void:
 	is_dead = true; _release_cover()
-	var sm = get_node_or_null("/root/SquadManager")
-	if sm: sm.unregister_enemy(self); sm.release_engagement_slot(self)
+	if _sm: _sm.unregister_enemy(self); _sm.release_engagement_slot(self)
 	died.emit(self)
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if is_instance_valid(e) and not e.is_dead and e != self:
@@ -676,9 +679,8 @@ func _draw_debug_lines() -> void:
 			_flank_target + Vector3(0, 0.5, 0), Color.MAGENTA)
 
 	# Fireteam connection lines (thin blue/orange to nearest teammate)
-	var sm = get_node_or_null("/root/SquadManager")
-	if sm:
-		var members: Array = sm.get_fireteam_members(fireteam)
+	if _sm:
+		var members: Array = _sm.get_fireteam_members(fireteam)
 		var nearest_dist: float = 999.0
 		var nearest_ally: Node3D = null
 		for ally in members:

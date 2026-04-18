@@ -138,19 +138,33 @@ const PSX_SHADER_PATH := "res://shaders/psx_surface.gdshader"
 var _psx_shader: Shader = null
 var _surface_materials: Array[WeakRef] = []
 var _postprocess_material: ShaderMaterial = null
-var _prev := {}
+var _dirty: bool = false  ## Set by setters when any export param changes
 
 # ── Lifecycle ──────────────────────────────────────────────────────────────────
 func _ready() -> void:
 	_psx_shader = load(PSX_SHADER_PATH)
 	if _psx_shader == null:
 		push_error("PSXManager: shader not found at " + PSX_SHADER_PATH)
-	_snapshot()
 
 func _process(_delta: float) -> void:
-	if _params_changed():
+	if _dirty:
+		_dirty = false
 		_push_to_all_materials()
-		_snapshot()
+
+## Called when any export parameter is changed at runtime (editor inspector).
+func _set(property: StringName, value: Variant) -> bool:
+	# Let Godot handle the actual property assignment, but mark dirty
+	# We only care about our @export parameters, not internal vars
+	if property in [
+		&"enabled", &"snap_resolution", &"snap_strength", &"affine_strength",
+		&"quantize_color", &"vertex_fog_enabled", &"fog_color", &"fog_start", &"fog_end",
+		&"downsample_resolution", &"grain_strength", &"dither_strength", &"color_levels",
+		&"shadow_tint", &"highlight_tint", &"tint_strength",
+		&"pp_contrast", &"pp_brightness", &"pp_saturation",
+		&"scanlines_enabled", &"scanline_strength", &"vignette_strength", &"vignette_radius",
+	]:
+		_dirty = true
+	return false  # return false so Godot still handles the assignment
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
@@ -266,55 +280,3 @@ func _push_postprocess(mat: ShaderMaterial) -> void:
 	# Vignette
 	mat.set_shader_parameter("vignette_strength", vignette_strength)
 	mat.set_shader_parameter("vignette_radius",   vignette_radius)
-
-func _params_changed() -> bool:
-	return (
-		_prev.get("snap_resolution")        != snap_resolution or
-		_prev.get("snap_strength")          != snap_strength or
-		_prev.get("affine_strength")        != affine_strength or
-		_prev.get("quantize_color")         != quantize_color or
-		_prev.get("vertex_fog_enabled")     != vertex_fog_enabled or
-		_prev.get("fog_color")              != fog_color or
-		_prev.get("fog_start")              != fog_start or
-		_prev.get("fog_end")                != fog_end or
-		_prev.get("downsample_resolution")  != downsample_resolution or
-		_prev.get("grain_strength")         != grain_strength or
-		_prev.get("dither_strength")        != dither_strength or
-		_prev.get("color_levels")           != color_levels or
-		_prev.get("shadow_tint")            != shadow_tint or
-		_prev.get("highlight_tint")         != highlight_tint or
-		_prev.get("tint_strength")          != tint_strength or
-		_prev.get("pp_contrast")            != pp_contrast or
-		_prev.get("pp_brightness")          != pp_brightness or
-		_prev.get("pp_saturation")          != pp_saturation or
-		_prev.get("scanlines_enabled")      != scanlines_enabled or
-		_prev.get("scanline_strength")      != scanline_strength or
-		_prev.get("vignette_strength")      != vignette_strength or
-		_prev.get("vignette_radius")        != vignette_radius
-	)
-
-func _snapshot() -> void:
-	_prev = {
-		"snap_resolution":        snap_resolution,
-		"snap_strength":          snap_strength,
-		"affine_strength":        affine_strength,
-		"quantize_color":         quantize_color,
-		"vertex_fog_enabled":     vertex_fog_enabled,
-		"fog_color":              fog_color,
-		"fog_start":              fog_start,
-		"fog_end":                fog_end,
-		"downsample_resolution":  downsample_resolution,
-		"grain_strength":         grain_strength,
-		"dither_strength":        dither_strength,
-		"color_levels":           color_levels,
-		"shadow_tint":            shadow_tint,
-		"highlight_tint":         highlight_tint,
-		"tint_strength":          tint_strength,
-		"pp_contrast":            pp_contrast,
-		"pp_brightness":          pp_brightness,
-		"pp_saturation":          pp_saturation,
-		"scanlines_enabled":      scanlines_enabled,
-		"scanline_strength":      scanline_strength,
-		"vignette_strength":      vignette_strength,
-		"vignette_radius":        vignette_radius,
-	}
