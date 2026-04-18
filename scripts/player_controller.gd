@@ -407,7 +407,9 @@ func _update_weapon_bob(delta: float) -> void:
 		if _gun_tween and _gun_tween.is_running():
 			_gun_tween.kill()
 			_gun_tween = null
-			can_shoot = true  # tween 可能设了 can_shoot=false，这里恢复
+			# 只在 shoot_timer 已归零时恢复（避免覆盖射击 cooldown）
+			if shoot_timer <= 0.0:
+				can_shoot = true
 		gun_pivot.position = _gun_ads_pos
 		gun_pivot.rotation_degrees = Vector3.ZERO
 		bob_origin = _gun_ads_pos
