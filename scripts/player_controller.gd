@@ -194,26 +194,8 @@ func _build_gun() -> void:
 	camera.add_child(gun_pivot)
 	bob_origin = gun_pivot.position
 
-	# 尝试加载 GLB 模型
-	var pistol_scene: PackedScene = load("res://assets/pistol.glb")
-	if pistol_scene:
-		var pistol_instance: Node3D = pistol_scene.instantiate()
-		pistol_instance.name = "PistolModel"
-		# 缩放到合适的 FPS 视角大小（Tripo3D 模型原始尺寸较大，需适当缩放）
-		pistol_instance.scale = Vector3(0.08, 0.08, 0.08)
-		# 旋转使枪口朝前（-Z 方向）
-		pistol_instance.rotation_degrees = Vector3(0, 180, 0)
-		gun_pivot.add_child(pistol_instance)
-		gun_mesh = pistol_instance.find_child("*", true, false) as MeshInstance3D
-	else:
-		# Fallback：程序化枪械（防止资产加载失败时游戏崩溃）
-		var body := MeshInstance3D.new()
-		var body_mesh := BoxMesh.new()
-		body_mesh.size = Vector3(0.06, 0.1, 0.32)
-		body.mesh = body_mesh
-		body.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.15, 0.15, 0.15)))
-		gun_pivot.add_child(body)
-		gun_mesh = body
+	# 默认 fallback 枪
+	_build_procedural_gun(&"ar_medium")
 
 	# 手臂（保持程序化，与任何枪械通用）
 	var arm_l := MeshInstance3D.new()
@@ -235,6 +217,326 @@ func _build_gun() -> void:
 	arm_r.rotation_degrees = Vector3(70, -10, -10)
 	arm_r.position = Vector3(0.35, -0.22, -0.1)
 	camera.add_child(arm_r)
+
+## 根据武器 ID 程序化构建不同外形的枪
+func _build_procedural_gun(weapon_id: StringName) -> void:
+	if gun_pivot == null:
+		return
+	# 清除旧枪（保留 pivot 本身）
+	for c in gun_pivot.get_children():
+		c.queue_free()
+
+	match weapon_id:
+		&"shotgun_cqc":
+			_make_gun_shotgun()
+		&"smg_short":
+			_make_gun_smg()
+		&"ar_medium":
+			_make_gun_ar()
+		&"dmr_long":
+			_make_gun_dmr()
+		&"sniper_disc":
+			_make_gun_sniper()
+		_:
+			_make_gun_ar()  # fallback
+
+## ── 霰弹枪：粗短枪管、大口径、无托 ──
+func _make_gun_shotgun() -> void:
+	var col := Color(0.45, 0.22, 0.08)
+	# 枪身（宽胖方块）
+	var body := MeshInstance3D.new()
+	body.name = "Body"
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.07, 0.09, 0.22)
+	body.mesh = bm
+	body.set_surface_override_material(0, PSXManager.make_psx_material(col))
+	gun_pivot.add_child(body)
+	# 粗短枪管
+	var barrel := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.025
+	cm.bottom_radius = 0.025
+	cm.height = 0.12
+	barrel.mesh = cm
+	barrel.rotation_degrees = Vector3(90, 0, 0)
+	barrel.position = Vector3(0, 0.01, -0.17)
+	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.08, 0.08, 0.08)))
+	gun_pivot.add_child(barrel)
+	# 泵（滑轨）
+	var pump := MeshInstance3D.new()
+	var pm := BoxMesh.new()
+	pm.size = Vector3(0.04, 0.04, 0.1)
+	pump.mesh = pm
+	pump.position = Vector3(0, -0.03, -0.08)
+	pump.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.3, 0.15, 0.05)))
+	gun_pivot.add_child(pump)
+	# 握把
+	var grip := MeshInstance3D.new()
+	var gm := BoxMesh.new()
+	gm.size = Vector3(0.04, 0.1, 0.04)
+	grip.mesh = gm
+	grip.position = Vector3(0, -0.08, 0.06)
+	grip.rotation_degrees = Vector3(-15, 0, 0)
+	grip.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.4)))
+	gun_pivot.add_child(grip)
+	gun_mesh = body
+
+## ── 冲锋枪：紧凑短小、弹匣突出、高射速 ──
+func _make_gun_smg() -> void:
+	var col := Color(0.22, 0.28, 0.35)
+	# 机匣（短小）
+	var body := MeshInstance3D.new()
+	body.name = "Body"
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.05, 0.07, 0.18)
+	body.mesh = bm
+	body.set_surface_override_material(0, PSXManager.make_psx_material(col))
+	gun_pivot.add_child(body)
+	# 短枪管
+	var barrel := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.012
+	cm.bottom_radius = 0.012
+	cm.height = 0.1
+	barrel.mesh = cm
+	barrel.rotation_degrees = Vector3(90, 0, 0)
+	barrel.position = Vector3(0, 0, -0.14)
+	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.08, 0.08, 0.08)))
+	gun_pivot.add_child(barrel)
+	# 长弹匣（向下突出）
+	var mag := MeshInstance3D.new()
+	var mm := BoxMesh.new()
+	mm.size = Vector3(0.025, 0.12, 0.035)
+	mag.mesh = mm
+	mag.position = Vector3(0, -0.08, -0.02)
+	mag.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.3)))
+	gun_pivot.add_child(mag)
+	# 折叠枪托（小方块）
+	var stock := MeshInstance3D.new()
+	var sm := BoxMesh.new()
+	sm.size = Vector3(0.03, 0.05, 0.06)
+	stock.mesh = sm
+	stock.position = Vector3(0, -0.01, 0.12)
+	stock.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.2)))
+	gun_pivot.add_child(stock)
+	# 握把
+	var grip := MeshInstance3D.new()
+	var gm := BoxMesh.new()
+	gm.size = Vector3(0.035, 0.08, 0.035)
+	grip.mesh = gm
+	grip.position = Vector3(0, -0.07, 0.05)
+	grip.rotation_degrees = Vector3(-12, 0, 0)
+	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.12, 0.12, 0.12)))
+	gun_pivot.add_child(grip)
+	gun_mesh = body
+
+## ── 突击步枪：中等长度、标准造型、护手+枪托 ──
+func _make_gun_ar() -> void:
+	var col := Color(0.18, 0.22, 0.18)
+	# 机匣
+	var body := MeshInstance3D.new()
+	body.name = "Body"
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.05, 0.07, 0.26)
+	body.mesh = bm
+	body.set_surface_override_material(0, PSXManager.make_psx_material(col))
+	gun_pivot.add_child(body)
+	# 枪管
+	var barrel := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.012
+	cm.bottom_radius = 0.014
+	cm.height = 0.16
+	barrel.mesh = cm
+	barrel.rotation_degrees = Vector3(90, 0, 0)
+	barrel.position = Vector3(0, 0.005, -0.21)
+	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.08, 0.08, 0.08)))
+	gun_pivot.add_child(barrel)
+	# 护手（包裹枪管）
+	var guard := MeshInstance3D.new()
+	var guardm := BoxMesh.new()
+	guardm.size = Vector3(0.04, 0.05, 0.12)
+	guard.mesh = guardm
+	guard.position = Vector3(0, -0.01, -0.15)
+	guard.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.15)))
+	gun_pivot.add_child(guard)
+	# 弹匣
+	var mag := MeshInstance3D.new()
+	var mm := BoxMesh.new()
+	mm.size = Vector3(0.025, 0.1, 0.03)
+	mag.mesh = mm
+	mag.position = Vector3(0, -0.07, 0.0)
+	mag.rotation_degrees = Vector3(-5, 0, 0)
+	mag.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.4)))
+	gun_pivot.add_child(mag)
+	# 枪托
+	var stock := MeshInstance3D.new()
+	var sm := BoxMesh.new()
+	sm.size = Vector3(0.04, 0.06, 0.1)
+	stock.mesh = sm
+	stock.position = Vector3(0, -0.005, 0.18)
+	stock.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.2)))
+	gun_pivot.add_child(stock)
+	# 握把
+	var grip := MeshInstance3D.new()
+	var gm := BoxMesh.new()
+	gm.size = Vector3(0.035, 0.08, 0.035)
+	grip.mesh = gm
+	grip.position = Vector3(0, -0.07, 0.06)
+	grip.rotation_degrees = Vector3(-12, 0, 0)
+	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.1, 0.1, 0.1)))
+	gun_pivot.add_child(grip)
+	gun_mesh = body
+
+## ── DMR精确步枪：长枪管、瞄准镜、细长枪身 ──
+func _make_gun_dmr() -> void:
+	var col := Color(0.28, 0.24, 0.16)
+	# 枪身（长）
+	var body := MeshInstance3D.new()
+	body.name = "Body"
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.045, 0.065, 0.3)
+	body.mesh = bm
+	body.set_surface_override_material(0, PSXManager.make_psx_material(col))
+	gun_pivot.add_child(body)
+	# 长枪管
+	var barrel := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.01
+	cm.bottom_radius = 0.012
+	cm.height = 0.22
+	barrel.mesh = cm
+	barrel.rotation_degrees = Vector3(90, 0, 0)
+	barrel.position = Vector3(0, 0.005, -0.26)
+	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.06, 0.06, 0.06)))
+	gun_pivot.add_child(barrel)
+	# 瞄准镜（圆筒）
+	var scope := MeshInstance3D.new()
+	var scopem := CylinderMesh.new()
+	scopem.top_radius = 0.018
+	scopem.bottom_radius = 0.018
+	scopem.height = 0.1
+	scope.mesh = scopem
+	scope.rotation_degrees = Vector3(90, 0, 0)
+	scope.position = Vector3(0, 0.05, -0.04)
+	scope.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.05, 0.05, 0.05)))
+	gun_pivot.add_child(scope)
+	# 小弹匣
+	var mag := MeshInstance3D.new()
+	var mm := BoxMesh.new()
+	mm.size = Vector3(0.022, 0.08, 0.025)
+	mag.mesh = mm
+	mag.position = Vector3(0, -0.06, 0.0)
+	mag.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.4)))
+	gun_pivot.add_child(mag)
+	# 枪托
+	var stock := MeshInstance3D.new()
+	var sm := BoxMesh.new()
+	sm.size = Vector3(0.04, 0.07, 0.12)
+	stock.mesh = sm
+	stock.position = Vector3(0, -0.005, 0.21)
+	stock.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.25)))
+	gun_pivot.add_child(stock)
+	# 握把
+	var grip := MeshInstance3D.new()
+	var gm := BoxMesh.new()
+	gm.size = Vector3(0.03, 0.07, 0.03)
+	grip.mesh = gm
+	grip.position = Vector3(0, -0.065, 0.07)
+	grip.rotation_degrees = Vector3(-15, 0, 0)
+	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.1, 0.1, 0.1)))
+	gun_pivot.add_child(grip)
+	gun_mesh = body
+
+## ── 狙击枪：最长枪管、大型瞄准镜、粗重枪身、消音器 ──
+func _make_gun_sniper() -> void:
+	var col := Color(0.12, 0.12, 0.16)
+	# 枪身（最长最粗）
+	var body := MeshInstance3D.new()
+	body.name = "Body"
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.05, 0.07, 0.36)
+	body.mesh = bm
+	body.set_surface_override_material(0, PSXManager.make_psx_material(col))
+	gun_pivot.add_child(body)
+	# 超长枪管
+	var barrel := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.013
+	cm.bottom_radius = 0.015
+	cm.height = 0.28
+	barrel.mesh = cm
+	barrel.rotation_degrees = Vector3(90, 0, 0)
+	barrel.position = Vector3(0, 0.005, -0.32)
+	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.05, 0.05, 0.05)))
+	gun_pivot.add_child(barrel)
+	# 消音器
+	var silencer := MeshInstance3D.new()
+	var slm := CylinderMesh.new()
+	slm.top_radius = 0.022
+	slm.bottom_radius = 0.022
+	slm.height = 0.08
+	silencer.mesh = slm
+	silencer.rotation_degrees = Vector3(90, 0, 0)
+	silencer.position = Vector3(0, 0.005, -0.5)
+	silencer.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.03, 0.03, 0.03)))
+	gun_pivot.add_child(silencer)
+	# 大型瞄准镜
+	var scope := MeshInstance3D.new()
+	var scopem := CylinderMesh.new()
+	scopem.top_radius = 0.022
+	scopem.bottom_radius = 0.022
+	scopem.height = 0.14
+	scope.mesh = scopem
+	scope.rotation_degrees = Vector3(90, 0, 0)
+	scope.position = Vector3(0, 0.06, -0.06)
+	scope.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.04, 0.04, 0.04)))
+	gun_pivot.add_child(scope)
+	# 镜片（亮色端面）
+	var lens := MeshInstance3D.new()
+	var lensm := CylinderMesh.new()
+	lensm.top_radius = 0.019
+	lensm.bottom_radius = 0.019
+	lensm.height = 0.005
+	lens.mesh = lensm
+	lens.rotation_degrees = Vector3(90, 0, 0)
+	lens.position = Vector3(0, 0.06, -0.132)
+	lens.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.2, 0.5, 0.8)))
+	gun_pivot.add_child(lens)
+	# 弹匣
+	var mag := MeshInstance3D.new()
+	var mm := BoxMesh.new()
+	mm.size = Vector3(0.025, 0.07, 0.03)
+	mag.mesh = mm
+	mag.position = Vector3(0, -0.06, 0.02)
+	mag.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.4)))
+	gun_pivot.add_child(mag)
+	# 重型枪托
+	var stock := MeshInstance3D.new()
+	var sm := BoxMesh.new()
+	sm.size = Vector3(0.045, 0.08, 0.14)
+	stock.mesh = sm
+	stock.position = Vector3(0, -0.005, 0.25)
+	stock.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.2)))
+	gun_pivot.add_child(stock)
+	# 脚架（两条小棍）
+	var bipod_l := MeshInstance3D.new()
+	var bpl := CylinderMesh.new()
+	bpl.top_radius = 0.005
+	bpl.bottom_radius = 0.005
+	bpl.height = 0.08
+	bipod_l.mesh = bpl
+	bipod_l.position = Vector3(-0.025, -0.06, -0.18)
+	bipod_l.rotation_degrees = Vector3(0, 0, 20)
+	bipod_l.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.08, 0.08, 0.08)))
+	gun_pivot.add_child(bipod_l)
+	var bipod_r := MeshInstance3D.new()
+	bipod_r.mesh = bpl.duplicate()
+	bipod_r.position = Vector3(0.025, -0.06, -0.18)
+	bipod_r.rotation_degrees = Vector3(0, 0, -20)
+	bipod_r.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.08, 0.08, 0.08)))
+	gun_pivot.add_child(bipod_r)
+	gun_mesh = body
 
 # ─────────────────────────────────────────────
 # 输入（鼠标视角）
@@ -694,17 +996,8 @@ func equip_weapon(item: Resource) -> void:
 	# Update raycast length
 	if raycast:
 		raycast.target_position = Vector3(0, 0, -raycast_range)
-	# Rebuild gun visuals with item color
-	if gun_pivot:
-		var body := gun_pivot.get_node_or_null("Body") as MeshInstance3D
-		if body == null:
-			# First child is body
-			for c in gun_pivot.get_children():
-				if c is MeshInstance3D:
-					body = c
-					break
-		if body:
-			body.set_surface_override_material(0, PSXManager.make_psx_material(item.mesh_color))
+	# Rebuild gun mesh based on weapon ID
+	_build_procedural_gun(item.id)
 	# ── Weapon equip animation: pull up from below ──
 	_play_equip_anim()
 

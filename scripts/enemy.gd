@@ -128,7 +128,7 @@ func _ready() -> void:
 		2:  # Heavy — seek cover, stay longer
 			state = State.SEEK_COVER
 
-	# Debug label (toggle with F3 in walk_scene)
+	# Debug label (always visible — shows HP/state/weapon)
 	_debug_label = Label3D.new()
 	_debug_label.name = "DebugLabel"
 	_debug_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -138,7 +138,7 @@ func _ready() -> void:
 	_debug_label.outline_size = 8
 	_debug_label.modulate = Color.WHITE
 	_debug_label.render_priority = 10
-	_debug_label.visible = false
+	_debug_label.visible = true
 	add_child(_debug_label)
 
 	var archetype_names := ["RUSHER", "STANDARD", "HEAVY"]
@@ -861,7 +861,7 @@ const STATE_COLORS := {
 }
 
 func _update_debug_label() -> void:
-	if _debug_label == null or not _debug_label.visible:
+	if _debug_label == null:
 		return
 	var state_name: String = State.keys()[state]
 	var arch_name: String = ARCHETYPE_NAMES[archetype]

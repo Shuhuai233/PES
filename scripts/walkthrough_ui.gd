@@ -214,21 +214,58 @@ func _build_hud() -> void:
 	weapon_name_label.text = ""
 	add_child(weapon_name_label)
 
-	# ── Debug 面板（左上角常驻）────────────────
+	# ── Debug 面板（屏幕左下角，HUD条上方）────────
 	_debug_panel = ColorRect.new()
-	_debug_panel.color = Color(0, 0, 0, 0.72)
-	_debug_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_debug_panel.color = Color(0.02, 0.02, 0.05, 0.82)
+	_debug_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_debug_panel.offset_left = 10
-	_debug_panel.offset_top = 10
-	_debug_panel.offset_right = 300
-	_debug_panel.offset_bottom = 220
+	_debug_panel.offset_top = -290
+	_debug_panel.offset_right = 310
+	_debug_panel.offset_bottom = -70
 	_debug_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_debug_panel)
+
+	# 面板边框
+	var border := ColorRect.new()
+	border.color = Color(0.3, 0.7, 1.0, 0.35)
+	border.set_anchors_preset(Control.PRESET_FULL_RECT)
+	border.offset_left = -1
+	border.offset_top = -1
+	border.offset_right = 1
+	border.offset_bottom = 1
+	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	border.z_index = -1
+	_debug_panel.add_child(border)
+
+	# 武器类型 icon 标签（大字 ASCII art）
+	var icon_label := Label.new()
+	icon_label.name = "WeaponIcon"
+	icon_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	icon_label.offset_left = 8
+	icon_label.offset_top = 6
+	icon_label.offset_right = 50
+	icon_label.offset_bottom = 40
+	icon_label.add_theme_font_size_override("font_size", 22)
+	icon_label.add_theme_color_override("font_color", Color(0.4, 0.85, 1.0))
+	icon_label.text = "[AR]"
+	_debug_panel.add_child(icon_label)
+
+	# 面板标题
+	var title := Label.new()
+	title.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	title.offset_left = 56
+	title.offset_top = 10
+	title.offset_right = 290
+	title.offset_bottom = 30
+	title.add_theme_font_size_override("font_size", 11)
+	title.add_theme_color_override("font_color", Color(0.5, 0.7, 0.9, 0.7))
+	title.text = "WEAPON DEBUG"
+	_debug_panel.add_child(title)
 
 	_debug_label = Label.new()
 	_debug_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_debug_label.offset_left = 8
-	_debug_label.offset_top = 6
+	_debug_label.offset_top = 34
 	_debug_label.offset_right = -8
 	_debug_label.offset_bottom = -6
 	_debug_label.add_theme_font_size_override("font_size", 12)
@@ -521,11 +558,27 @@ func update_weapon(weapon_name: String, slot: int) -> void:
 			lbl.add_theme_color_override("font_color", slot_colors[i].darkened(0.5))
 			lbl.add_theme_font_size_override("font_size", 13)
 
-## 更新左上角武器 debug 面板
+## 更新左下角武器 debug 面板
 func update_debug_weapon(info: Dictionary) -> void:
 	if not _debug_label:
 		return
-	var slot_tag := "[%d] %s" % [info.get("slot", 0), info.get("name", "?")]
+	# 更新 icon
+	var slot: int = info.get("slot", 0)
+	var icon_texts := ["[SG]", "[SMG]", "[AR]", "[DMR]", "[SNP]"]
+	var icon_colors := [
+		Color(0.9, 0.45, 0.1),
+		Color(0.25, 0.75, 0.95),
+		Color(0.3, 0.9, 0.35),
+		Color(0.85, 0.75, 0.2),
+		Color(0.7, 0.3, 0.95),
+	]
+	if _debug_panel:
+		var icon_lbl: Label = _debug_panel.get_node_or_null("WeaponIcon") as Label
+		if icon_lbl and slot >= 1 and slot <= 5:
+			icon_lbl.text = icon_texts[slot - 1]
+			icon_lbl.add_theme_color_override("font_color", icon_colors[slot - 1])
+
+	var slot_tag := "[%d] %s" % [slot, info.get("name", "?")]
 	var dmg     := "DMG      %d" % info.get("damage", 0)
 	var rate    := "FIRE RT  %.2f s  (%.0f rpm)" % [info.get("fire_rate", 0), 60.0 / maxf(info.get("fire_rate", 1.0), 0.001)]
 	var mag     := "MAG      %d / %d" % [info.get("ammo", 0), info.get("mag_size", 0)]
