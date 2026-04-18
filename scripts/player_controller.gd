@@ -1123,8 +1123,8 @@ func _try_shoot() -> void:
 		var collider := raycast.get_collider()
 		if collider and collider.is_in_group("enemies"):
 			# 判定爆头：命中点 Y > 敌人脚底 + 1.0（头部区域）
-			var is_headshot := hit_point.y > collider.global_position.y + 1.0
-			var final_damage := damage_per_shot * (3 if is_headshot else 1)
+			var is_headshot: bool = hit_point.y > collider.global_position.y + 1.0
+			var final_damage: int = damage_per_shot * (3 if is_headshot else 1)
 			enemy_hit.emit(collider)
 			if collider.has_method("take_damage"):
 				collider.take_damage(final_damage)
