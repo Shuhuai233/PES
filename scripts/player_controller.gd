@@ -854,8 +854,8 @@ func _apply_recoil() -> void:
 func _update_recoil(delta: float) -> void:
 	# ── 第一阶段：平滑施加 pending recoil 到镜头 ──
 	if _recoil_pending_v > 0.001 or abs(_recoil_pending_h) > 0.001:
-		var apply_v := _recoil_pending_v * min(1.0, delta * recoil_apply_speed)
-		var apply_h := _recoil_pending_h * min(1.0, delta * recoil_apply_speed)
+		var apply_v: float = _recoil_pending_v * minf(1.0, delta * recoil_apply_speed)
+		var apply_h: float = _recoil_pending_h * minf(1.0, delta * recoil_apply_speed)
 		head.rotation.x -= deg_to_rad(apply_v)
 		head.rotation.x = clamp(head.rotation.x, deg_to_rad(-85), deg_to_rad(85))
 		rotate_y(deg_to_rad(apply_h))
