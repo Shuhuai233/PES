@@ -993,6 +993,10 @@ func _update_recoil(delta: float) -> void:
 # ─────────────────────────────────────────────
 func _update_spread(delta: float) -> void:
 	current_spread = move_toward(current_spread, 0.0, spread_recovery * delta)
+	# 通知 HUD 更新准心扩散（如果 UI 存在）
+	var ui := get_node_or_null("/root/WalkScene/WalkthroughUI")
+	if ui and ui.has_method("update_crosshair_spread"):
+		ui.update_crosshair_spread(_get_current_spread())
 
 func _get_current_spread() -> float:
 	var s := spread_base
@@ -1100,8 +1104,10 @@ func _try_shoot() -> void:
 	shot_fired.emit()
 	ammo_changed.emit(current_ammo, magazine_size)
 	_flash_muzzle()
-	_kick_gun(false)
+	_kick_gun()
 	_apply_recoil()
+	_apply_shoot_shake()  # 镜头微震
+	_apply_fov_punch()    # FOV 短暂扩大
 	current_spread += spread_per_shot
 	_eject_shell()
 
@@ -1144,22 +1150,52 @@ func _try_shoot() -> void:
 # ─────────────────────────────────────────────
 # 枪械动画
 # ─────────────────────────────────────────────
-func _kick_gun(_unused: bool = false) -> void:
+func _kick_gun() -> void:
 	if gun_pivot == null:
-		return
-	# ADS 时完全跳过视觉 kick（位置由 bob 函数强制锁定）
-	if is_aiming:
 		return
 	if _gun_tween and _gun_tween.is_running():
 		_gun_tween.kill()
 	_gun_tween = create_tween()
-	var kick_pos := bob_origin + Vector3(0, recoil_kick_pos * 0.5, recoil_kick_pos)
-	var rot_v := -recoil_kick_rot
-	var rot_h: float = randf_range(-1.5, 1.5)
-	_gun_tween.tween_property(gun_pivot, "position", kick_pos, 0.04)
-	_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, 0), 0.04)
-	_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.1)
-	_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.1)
+	if is_aiming:
+		# ADS kick: 只做微小的后退+旋转（位置由 bob 函数在下一帧恢复）
+		var ads_kick := bob_origin + Vector3(0, 0.005, recoil_kick_pos * 0.4)
+		_gun_tween.tween_property(gun_pivot, "position", ads_kick, 0.03)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(-recoil_kick_rot * 0.3, 0, 0), 0.03)
+		_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.06)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.06)
+	else:
+		# Hip-fire kick: 完整的后退+旋转+水平偏移
+		var kick_pos := bob_origin + Vector3(0, recoil_kick_pos * 0.5, recoil_kick_pos)
+		var rot_v := -recoil_kick_rot
+		var rot_h: float = randf_range(-2.0, 2.0)
+		_gun_tween.tween_property(gun_pivot, "position", kick_pos, 0.04)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, randf_range(-1.0, 1.0)), 0.04)
+		_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.12)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.12)
+
+## 射击时镜头微震（不同于后坐力上抬，这是随机抖动增加"冲击感"）
+func _apply_shoot_shake() -> void:
+	var intensity: float = 0.3
+	match _current_weapon_id:
+		&"shotgun_cqc": intensity = 1.2
+		&"smg_short": intensity = 0.15
+		&"ar_medium": intensity = 0.3
+		&"dmr_long": intensity = 0.6
+		&"sniper_disc": intensity = 1.8
+	if is_aiming:
+		intensity *= 0.4
+	shake_camera(intensity, 0.08)
+
+## 射击时 FOV 短暂扩大（冲击感）
+func _apply_fov_punch() -> void:
+	var punch: float = 1.5
+	match _current_weapon_id:
+		&"shotgun_cqc": punch = 4.0
+		&"smg_short": punch = 0.8
+		&"ar_medium": punch = 1.5
+		&"dmr_long": punch = 2.5
+		&"sniper_disc": punch = 5.0
+	camera.fov += punch  # _update_fov 每帧会 lerp 回 base_fov
 
 func _on_land(strength: float) -> void:
 	if gun_pivot == null or is_aiming:
@@ -1228,36 +1264,48 @@ func _get_muzzle_world_pos() -> Vector3:
 ## 枪口火焰可见效果
 func _spawn_muzzle_flash_fx() -> void:
 	var flash_pos := _get_muzzle_world_pos()
-	# 闪光主体（亮黄色方块，快速闪烁）
+	# 闪光主体（亮黄-橙色，较大）
 	var flash := MeshInstance3D.new()
 	var fm := BoxMesh.new()
-	var flash_size := randf_range(0.04, 0.08)
-	fm.size = Vector3(flash_size, flash_size, flash_size * 1.5)
+	var flash_size := randf_range(0.08, 0.15)
+	fm.size = Vector3(flash_size, flash_size, flash_size * 2.0)
 	flash.mesh = fm
-	flash.set_surface_override_material(0, PSXManager.make_psx_material(Color(1.0, 0.85, 0.3)))
+	flash.set_surface_override_material(0, PSXManager.make_psx_material(Color(1.0, 0.8, 0.2)))
 	get_tree().current_scene.add_child(flash)
 	flash.global_position = flash_pos
 	flash.look_at(flash_pos + camera.global_basis * Vector3.FORWARD, Vector3.UP)
-	flash.rotation_degrees.z = randf() * 360  # 随机旋转
-	# 快速闪烁消失
+	flash.rotation_degrees.z = randf() * 360
 	var tw := flash.create_tween()
-	tw.tween_property(flash, "scale", Vector3.ZERO, 0.06)
+	tw.tween_property(flash, "scale", Vector3.ZERO, 0.07)
 	tw.tween_callback(flash.queue_free)
-	# 小火花（2-3 个）
-	for i in randi_range(2, 3):
+	# 第二层闪光（更大更亮的白色核心）
+	var core := MeshInstance3D.new()
+	var cm := BoxMesh.new()
+	var core_size := flash_size * 0.6
+	cm.size = Vector3(core_size, core_size, core_size)
+	core.mesh = cm
+	core.set_surface_override_material(0, PSXManager.make_psx_material(Color(1.0, 1.0, 0.9)))
+	get_tree().current_scene.add_child(core)
+	core.global_position = flash_pos
+	var ctw := core.create_tween()
+	ctw.tween_property(core, "scale", Vector3.ZERO, 0.05)
+	ctw.tween_callback(core.queue_free)
+	# 火花粒子（3-5 个，更大更明显）
+	for i in randi_range(3, 5):
 		var spark := MeshInstance3D.new()
 		var sm := BoxMesh.new()
-		sm.size = Vector3(0.008, 0.008, 0.025)
+		sm.size = Vector3(0.012, 0.012, 0.04)
 		spark.mesh = sm
-		spark.set_surface_override_material(0, PSXManager.make_psx_material(Color(1.0, 0.7, 0.2)))
+		spark.set_surface_override_material(0, PSXManager.make_psx_material(
+			Color(1.0, randf_range(0.5, 0.9), 0.1)))
 		get_tree().current_scene.add_child(spark)
 		spark.global_position = flash_pos
 		var spark_dir := camera.global_basis * Vector3(
-			randf_range(-0.3, 0.3), randf_range(-0.3, 0.3), -1.0).normalized()
+			randf_range(-0.5, 0.5), randf_range(-0.3, 0.5), -1.0).normalized()
 		var stw := spark.create_tween()
 		stw.tween_property(spark, "global_position",
-			flash_pos + spark_dir * randf_range(0.1, 0.25), 0.08)
-		stw.tween_property(spark, "scale", Vector3.ZERO, 0.04)
+			flash_pos + spark_dir * randf_range(0.15, 0.4), 0.1)
+		stw.tween_property(spark, "scale", Vector3.ZERO, 0.06)
 		stw.tween_callback(spark.queue_free)
 
 # ─────────────────────────────────────────────
