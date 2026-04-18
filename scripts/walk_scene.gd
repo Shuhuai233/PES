@@ -50,7 +50,7 @@ func _ready() -> void:
 	_setup_enemy_debug_overlay()
 	# 初始化 HUD 血量显示
 	if ui and ui.has_method("update_health"):
-		ui.update_health(player_health, max_health)
+		ui.update_health(player_health)
 
 func _setup_psx() -> void:
 	var pp_shader := load("res://shaders/psx_postprocess.gdshader") as Shader
