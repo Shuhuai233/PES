@@ -13,8 +13,6 @@ const ItemDataRes := preload("res://scripts/item_data.gd")
 
 var loot_spawner_node: Node3D = null
 var inventory_ui_node: CanvasLayer = null
-var cover_spawner_node: Node3D = null  ## now arena_layout
-var nav_region: NavigationRegion3D = null
 
 var player_health: int = 500
 var max_health: int = 500
@@ -47,9 +45,6 @@ func _ready() -> void:
 	_setup_psx()
 	_setup_loot()
 	_setup_inventory_ui()
-	_setup_cover()
-	_setup_flicker()
-	_setup_dust_particles()
 	_connect_signals()
 	spawner.deactivate()
 	_setup_enemy_debug_overlay()
@@ -74,60 +69,6 @@ func _setup_inventory_ui() -> void:
 	inventory_ui_node.name = "InventoryUI"
 	inventory_ui_node.set_script(load("res://scripts/inventory_ui.gd"))
 	add_child(inventory_ui_node)
-
-func _setup_cover() -> void:
-	# Create NavigationRegion3D for AI pathfinding
-	nav_region = NavigationRegion3D.new()
-	nav_region.name = "NavigationRegion3D"
-	add_child(nav_region)
-
-	# Use fixed arena layout instead of procedural cover
-	cover_spawner_node = Node3D.new()
-	cover_spawner_node.name = "ArenaLayout"
-	cover_spawner_node.set_script(load("res://scripts/arena_layout.gd"))
-	add_child(cover_spawner_node)
-	cover_spawner_node.call_deferred("build_layout")
-	call_deferred("_bake_navmesh")
-
-func _bake_navmesh() -> void:
-	# Wait a few frames for cover to be fully placed
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await get_tree().process_frame
-
-	print("[NavMesh] Starting bake... (cover nodes: %d)" % get_tree().get_nodes_in_group("cover_point").size())
-
-	var nav_mesh := NavigationMesh.new()
-	# Arena is 80x80, flat floor at y=0
-	nav_mesh.agent_radius = 0.4
-	nav_mesh.agent_height = 1.8
-	nav_mesh.agent_max_climb = 0.3
-	nav_mesh.agent_max_slope = 45.0
-	nav_mesh.cell_size = 0.25
-	nav_mesh.cell_height = 0.25
-	# Filter settings for indoor arena
-	nav_mesh.filter_low_hanging_obstacles = true
-	nav_mesh.filter_ledge_spans = true
-	nav_mesh.filter_walkable_low_height_spans = true
-	# Parse geometry from ALL static colliders in the scene
-	nav_mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
-	nav_mesh.geometry_source_geometry_mode = NavigationMesh.SOURCE_GEOMETRY_ROOT_NODE_CHILDREN
-
-	nav_region.navigation_mesh = nav_mesh
-
-	# Collect source geometry from the entire scene tree (self = WalkScene root)
-	var source_geo := NavigationMeshSourceGeometryData3D.new()
-	NavigationServer3D.parse_source_geometry_data(nav_mesh, source_geo, self)
-	print("[NavMesh] Source geometry parsed, baking...")
-	NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source_geo)
-	nav_region.navigation_mesh = nav_mesh
-
-	# Verify
-	var poly_count := nav_mesh.get_polygon_count()
-	var vert_count := nav_mesh.get_vertices().size()
-	print("[NavMesh] Bake complete — polygons: %d, vertices: %d" % [poly_count, vert_count])
-	if poly_count == 0:
-		push_warning("[NavMesh] WARNING: NavMesh has 0 polygons! AI pathfinding won't work.")
 
 func _setup_flicker() -> void:
 	var lights_root := get_node_or_null("FluorescentLights")
@@ -377,10 +318,16 @@ func _toggle_navmesh_debug_mesh() -> void:
 		if _navmesh_debug_mesh != null and is_instance_valid(_navmesh_debug_mesh):
 			_navmesh_debug_mesh.visible = true
 			return
-		if nav_region == null or nav_region.navigation_mesh == null:
-			print("[Debug] No NavMesh to visualize")
+		# Find NavigationRegion3D in scene tree
+		var nav_reg: NavigationRegion3D = null
+		for child in get_children():
+			if child is NavigationRegion3D:
+				nav_reg = child
+				break
+		if nav_reg == null or nav_reg.navigation_mesh == null:
+			print("[Debug] No NavigationRegion3D found in scene — bake NavMesh in editor first")
 			return
-		var nm: NavigationMesh = nav_region.navigation_mesh
+		var nm: NavigationMesh = nav_reg.navigation_mesh
 		var verts: PackedVector3Array = nm.get_vertices()
 		var poly_count: int = nm.get_polygon_count()
 		if poly_count == 0 or verts.size() == 0:
