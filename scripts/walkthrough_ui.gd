@@ -739,3 +739,45 @@ func flash_white(duration: float = 0.6) -> void:
 	var tw := create_tween()
 	tw.tween_property(fade_panel, "color:a", 0.9, duration * 0.3)
 	tw.tween_property(fade_panel, "color:a", 0.0, duration * 0.7)
+
+# ─────────────────────────────────────────────
+# 方向伤害指示器（红色弧形标记）
+# ─────────────────────────────────────────────
+## 显示一个指向攻击者方向的红色指示器
+func show_damage_direction(attacker_pos: Vector3) -> void:
+	var player := get_tree().get_first_node_in_group("player") as Node3D
+	if player == null:
+		return
+	# 计算攻击者相对于玩家朝向的角度
+	var to_attacker := (attacker_pos - player.global_position).normalized()
+	var forward := -player.global_basis.z
+	var angle := atan2(to_attacker.x * forward.z - to_attacker.z * forward.x,
+		to_attacker.x * forward.x + to_attacker.z * forward.z)
+
+	# 创建红色指示器楔形
+	var indicator := ColorRect.new()
+	indicator.size = Vector2(8, 50)
+	indicator.color = Color(1.0, 0.1, 0.0, 0.7)
+	indicator.set_anchors_preset(Control.PRESET_CENTER)
+	indicator.pivot_offset = Vector2(4, 120)  # 旋转中心在远端
+	indicator.rotation = angle
+	indicator.position = Vector2(-4, -120)
+	add_child(indicator)
+	# 1 秒淡出
+	var tw := indicator.create_tween()
+	tw.tween_property(indicator, "color:a", 0.0, 1.0)
+	tw.tween_callback(indicator.queue_free)
+
+## 爆头 hit marker（金色 X 标记）
+func show_headshot_marker() -> void:
+	var marker := Label.new()
+	marker.text = "✦ HEADSHOT"
+	marker.set_anchors_preset(Control.PRESET_CENTER)
+	marker.add_theme_color_override("font_color", Color(1.0, 0.85, 0.0))
+	marker.add_theme_font_size_override("font_size", 18)
+	marker.position = Vector2(-50, 25)
+	add_child(marker)
+	var tw := marker.create_tween()
+	tw.tween_property(marker, "position:y", 15.0, 0.5)
+	tw.parallel().tween_property(marker, "modulate:a", 0.0, 0.5)
+	tw.tween_callback(marker.queue_free)

@@ -79,7 +79,7 @@ var _debug_ft_line: MeshInstance3D = null
 @onready var mesh: MeshInstance3D = $MeshInstance3D
 
 signal died(enemy: Node)
-signal damaged_player(amount: int)
+signal damaged_player(amount: int, attacker_pos: Vector3)
 signal shot_fired_at(origin: Vector3, direction: Vector3)
 
 # ─────────────────────────────────────────────
@@ -345,7 +345,7 @@ func _fire_at_player() -> void:
 	query.exclude = [get_rid()]; query.collision_mask = 0b111
 	var result := space.intersect_ray(query)
 	if result and result.collider and result.collider.is_in_group("player"):
-		damaged_player.emit(shoot_damage)
+		damaged_player.emit(shoot_damage, global_position)
 	_spawn_tracer(muzzle_pos, dir)
 	shot_fired_at.emit(muzzle_pos, dir)
 	_enemy_muzzle_flash()
@@ -403,11 +403,11 @@ func _grenade_explode(pos: Vector3, grenade_node: Node) -> void:
 	if _player and is_instance_valid(_player):
 		var dist := _player.global_position.distance_to(pos)
 		if dist < grenade_radius:
-			damaged_player.emit(int(grenade_damage * (1.0 - dist / grenade_radius)))
+			damaged_player.emit(int(grenade_damage * (1.0 - dist / grenade_radius)), global_position)
 
 func _try_melee() -> void:
 	if _melee_cooldown > 0.0: return
-	_melee_cooldown = 1.2; damaged_player.emit(melee_damage)
+	_melee_cooldown = 1.2; damaged_player.emit(melee_damage, global_position)
 
 # ─────────────────────────────────────────────
 # Cover selection V2

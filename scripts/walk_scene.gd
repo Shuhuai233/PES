@@ -48,6 +48,9 @@ func _ready() -> void:
 	_connect_signals()
 	spawner.deactivate()
 	_setup_enemy_debug_overlay()
+	# 初始化 HUD 血量显示
+	if ui and ui.has_method("update_health"):
+		ui.update_health(player_health, max_health)
 
 func _setup_psx() -> void:
 	var pp_shader := load("res://shaders/psx_postprocess.gdshader") as Shader
@@ -135,6 +138,10 @@ func _connect_signals() -> void:
 	player.stamina_changed.connect(ui.update_stamina)
 	player.weapon_changed.connect(ui.update_weapon)
 	player.enemy_hit.connect(_on_enemy_hit)
+	if player.has_signal("headshot_hit"):
+		player.headshot_hit.connect(_on_headshot)
+	if player.has_signal("weapon_jammed"):
+		player.weapon_jammed.connect(_on_weapon_jammed)
 
 	# Portal signals
 	portal.player_entered_portal.connect(_on_player_entered_portal)
@@ -649,6 +656,20 @@ func _on_enemy_spawned(enemy: Node) -> void:
 func _on_walkthrough_complete() -> void:
 	print("Walkthrough complete!")
 
+func _on_headshot(_enemy: Node) -> void:
+	if ui and ui.has_method("show_headshot_marker"):
+		ui.show_headshot_marker()
+
+func _on_weapon_jammed() -> void:
+	if ui and ui.has_method("show_jam_warning"):
+		# jam_warning label 已经在 UI 里构建好了
+		var jw := ui.get("jam_warning")
+		if jw and jw is Label:
+			jw.visible = true
+			var tw := create_tween()
+			tw.tween_interval(0.5)
+			tw.tween_callback(func(): if is_instance_valid(jw): jw.visible = false)
+
 # ─────────────────────────────────────────────
 # Callbacks — loot & inventory
 # ─────────────────────────────────────────────
@@ -680,16 +701,18 @@ func _portal_fov_warp() -> void:
 # ─────────────────────────────────────────────
 # Damage / Death
 # ─────────────────────────────────────────────
-func take_damage(amount: int) -> void:
+func take_damage(amount: int, attacker_pos: Vector3 = Vector3.ZERO) -> void:
 	if _god_mode:
 		return
 	player_health = max(0, player_health - amount)
 	ui.update_health(player_health)
 	SessionManager.set_value("damage_taken",
 		int(SessionManager.get_value("damage_taken", 0)) + amount)
-	# ── Hit feedback: screen shake + red flash ──
+	# ── Hit feedback: screen shake + red flash + direction indicator ──
 	player.shake_camera(2.5, 0.2)
 	ui.flash_damage(clamp(float(amount) / 30.0, 0.15, 0.5))
+	if attacker_pos != Vector3.ZERO and ui.has_method("show_damage_direction"):
+		ui.show_damage_direction(attacker_pos)
 	if player_health <= 0:
 		_on_player_died()
 

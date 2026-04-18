@@ -124,6 +124,21 @@ var shoot_timer: float = 0.0
 var current_ammo: int = 0
 var is_reloading: bool = false
 var reload_timer: float = 0.0
+var is_jammed: bool = false         # 卡壳状态
+var jam_chance: float = 0.0         # 当前武器卡壳概率
+
+# DMR 连续命中加速
+var _dmr_streak: int = 0            # 连续命中计数
+var _dmr_streak_timer: float = 0.0  # 连击超时计时器
+const DMR_STREAK_TIMEOUT := 1.5     # 超过 1.5 秒未命中重置连击
+const DMR_MAX_STREAK := 5           # 最大连击层数
+const DMR_SPEED_PER_STACK := 0.06   # 每层减少射击间隔（秒）
+
+# Sniper 蓄力
+var _sniper_charging: bool = false
+var _sniper_charge: float = 0.0     # 0→1
+const SNIPER_CHARGE_TIME := 0.8     # 蓄力时间（秒）
+const SNIPER_MIN_CHARGE := 0.3      # 最低可射击蓄力比例
 
 # 快速切换武器槽（1-5），-1 表示未选中
 var current_quick_slot: int = -1
@@ -179,6 +194,8 @@ var _scope_overlay: ColorRect = null  # 狙击镜黑边遮罩
 signal ammo_changed(current: int, max_ammo: int)
 signal shot_fired()
 signal enemy_hit(node: Node)
+signal headshot_hit(node: Node)
+signal weapon_jammed()
 signal stamina_changed(current: float, max_val: float)
 signal weapon_changed(weapon_name: String, slot: int)
 
@@ -825,13 +842,40 @@ func _tick_reload(delta: float) -> void:
 			_finish_reload()
 
 func _handle_action_input() -> void:
+	# 卡壳清除（按R）
+	if is_jammed:
+		if Input.is_action_just_pressed("reload"):
+			is_jammed = false
+			_start_reload()
+		return  # 卡壳时不能做别的
 	if Input.is_action_just_pressed("reload") and not is_reloading:
 		_start_reload()
 	# 奔跑时若禁止开枪则跳过
 	if is_sprinting() and not sprint_can_shoot:
 		return
-	if Input.is_action_pressed("shoot") and can_shoot and not is_reloading:
-		_try_shoot()
+	# Sniper 蓄力机制
+	if _current_weapon_id == &"sniper_disc":
+		if Input.is_action_pressed("shoot") and can_shoot and not is_reloading:
+			if not _sniper_charging:
+				_sniper_charging = true
+				_sniper_charge = 0.0
+		if _sniper_charging:
+			_sniper_charge = minf(_sniper_charge + get_process_delta_time() / SNIPER_CHARGE_TIME, 1.0)
+			if Input.is_action_just_released("shoot"):
+				_sniper_charging = false
+				if _sniper_charge >= SNIPER_MIN_CHARGE:
+					_try_shoot()  # 伤害会乘以 _sniper_charge
+				_sniper_charge = 0.0
+	else:
+		_sniper_charging = false
+		_sniper_charge = 0.0
+		if Input.is_action_pressed("shoot") and can_shoot and not is_reloading:
+			_try_shoot()
+	# DMR 连击超时
+	if _dmr_streak > 0:
+		_dmr_streak_timer -= get_process_delta_time()
+		if _dmr_streak_timer <= 0.0:
+			_dmr_streak = 0
 
 # ─────────────────────────────────────────────
 # 蹲下
@@ -1075,8 +1119,13 @@ func _apply_movement(delta: float) -> void:
 		target_speed = walk_speed
 
 	if direction:
-		velocity.x = move_toward(velocity.x, direction.x * target_speed, acceleration * delta)
-		velocity.z = move_toward(velocity.z, direction.z * target_speed, acceleration * delta)
+		if is_on_floor():
+			velocity.x = move_toward(velocity.x, direction.x * target_speed, acceleration * delta)
+			velocity.z = move_toward(velocity.z, direction.z * target_speed, acceleration * delta)
+		else:
+			# 空中控制（30% 加速度，允许空中微调方向）
+			velocity.x = move_toward(velocity.x, direction.x * target_speed, acceleration * 0.3 * delta)
+			velocity.z = move_toward(velocity.z, direction.z * target_speed, acceleration * 0.3 * delta)
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, deceleration * delta)
 		velocity.z = move_toward(velocity.z, 0.0, deceleration * delta)
@@ -1098,21 +1147,54 @@ func _try_shoot() -> void:
 		_start_reload()
 		return
 
+	# ── 卡壳检测 ──
+	if jam_chance > 0.0 and randf() < jam_chance:
+		is_jammed = true
+		can_shoot = false
+		weapon_jammed.emit()
+		# 卡壳视觉：枪模抖动
+		if gun_pivot:
+			if _gun_tween and _gun_tween.is_running(): _gun_tween.kill()
+			_gun_tween = create_tween()
+			_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(-jam_kick_rot, 0, 3), 0.05)
+			_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.15)
+		return
+
 	current_ammo -= 1
 	can_shoot = false
-	shoot_timer = shoot_cooldown
+
+	# DMR 连击加速射击
+	var cooldown := shoot_cooldown
+	if _current_weapon_id == &"dmr_long" and _dmr_streak > 0:
+		cooldown = maxf(0.15, shoot_cooldown - _dmr_streak * DMR_SPEED_PER_STACK)
+
+	shoot_timer = cooldown
 	shot_fired.emit()
 	ammo_changed.emit(current_ammo, magazine_size)
 	_flash_muzzle()
 	_kick_gun()
 	_apply_recoil()
-	_apply_shoot_shake()  # 镜头微震
-	_apply_fov_punch()    # FOV 短暂扩大
+	_apply_shoot_shake()
+	_apply_fov_punch()
 	current_spread += spread_per_shot
 	_eject_shell()
 
-	# 应用扩散偏移到 RayCast
+	# ── 散弹枪多弹丸 ──
+	if _current_weapon_id == &"shotgun_cqc":
+		_fire_shotgun_pellets()
+		return
+
+	# ── 单发射线检测 ──
+	var dmg := damage_per_shot
+	# Sniper 蓄力伤害倍率
+	if _current_weapon_id == &"sniper_disc" and _sniper_charge > 0.0:
+		dmg = int(float(dmg) * lerpf(0.4, 1.0, _sniper_charge))
+
 	var spread := _get_current_spread()
+	_fire_single_ray(dmg, spread)
+
+## 单发射线
+func _fire_single_ray(dmg: int, spread: float) -> void:
 	if raycast:
 		var ray_z := -raycast_range
 		if spread > 0.001:
@@ -1122,30 +1204,77 @@ func _try_shoot() -> void:
 				ray_z)
 		else:
 			raycast.target_position = Vector3(0, 0, ray_z)
+		raycast.force_raycast_update()
 
-	# 射线检测命中
 	var hit_point: Vector3
 	if raycast and raycast.is_colliding():
 		hit_point = raycast.get_collision_point()
 		var hit_normal := raycast.get_collision_normal()
 		var collider := raycast.get_collider()
 		if collider and collider.is_in_group("enemies"):
-			# 判定爆头：命中点 Y > 敌人脚底 + 1.0（头部区域）
-			var is_headshot: bool = hit_point.y > collider.global_position.y + 1.0
-			var final_damage: int = damage_per_shot * (3 if is_headshot else 1)
+			# 爆头：命中点 Y > 敌人脚底 + 1.3（缩小到头部 top 20%）
+			var is_headshot: bool = hit_point.y > collider.global_position.y + 1.3
+			var final_damage: int = dmg * (3 if is_headshot else 1)
 			enemy_hit.emit(collider)
+			if is_headshot:
+				headshot_hit.emit(collider)
 			if collider.has_method("take_damage"):
 				collider.take_damage(final_damage)
 			_spawn_hit_particles(hit_point, hit_normal)
+			# DMR 连击计数
+			if _current_weapon_id == &"dmr_long":
+				_dmr_streak = mini(_dmr_streak + 1, DMR_MAX_STREAK)
+				_dmr_streak_timer = DMR_STREAK_TIMEOUT
 		else:
-			# 命中墙壁/地面/掩体等非敌人物体 → 弹孔 + 碎屑
 			_spawn_bullet_hole(hit_point, hit_normal)
 			_spawn_impact_debris(hit_point, hit_normal)
+			# DMR 未命中敌人重置连击
+			if _current_weapon_id == &"dmr_long":
+				_dmr_streak = 0
 	else:
 		hit_point = camera.global_position + camera.global_basis * raycast.target_position
+		if _current_weapon_id == &"dmr_long":
+			_dmr_streak = 0
 
-	# 弹道 tracer
 	_spawn_tracer(hit_point)
+
+## 散弹枪 — 8 发弹丸扇形散射
+func _fire_shotgun_pellets() -> void:
+	var pellet_count := 8
+	var pellet_spread: float = 0.06  # 每发弹丸的基础散射
+	var pellet_dmg: int = int(float(damage_per_shot) / 3.0)  # 每颗弹丸伤害（总命中 ~2.5x 单发）
+	for i in pellet_count:
+		if raycast:
+			raycast.target_position = Vector3(
+				randf_range(-pellet_spread, pellet_spread),
+				randf_range(-pellet_spread, pellet_spread),
+				-raycast_range)
+			raycast.force_raycast_update()
+		var hit_point: Vector3
+		if raycast and raycast.is_colliding():
+			hit_point = raycast.get_collision_point()
+			var hit_normal := raycast.get_collision_normal()
+			var collider := raycast.get_collider()
+			if collider and collider.is_in_group("enemies"):
+				var is_headshot: bool = hit_point.y > collider.global_position.y + 1.3
+				var final_damage: int = pellet_dmg * (3 if is_headshot else 1)
+				if i == 0:  # 只发一次信号
+					enemy_hit.emit(collider)
+					if is_headshot:
+						headshot_hit.emit(collider)
+				if collider.has_method("take_damage"):
+					collider.take_damage(final_damage)
+				if i == 0:
+					_spawn_hit_particles(hit_point, hit_normal)
+			else:
+				if i < 3:  # 只生成前 3 个弹孔避免性能问题
+					_spawn_bullet_hole(hit_point, hit_normal)
+				if i == 0:
+					_spawn_impact_debris(hit_point, hit_normal)
+		else:
+			hit_point = camera.global_position + camera.global_basis * raycast.target_position
+		if i == 0:
+			_spawn_tracer(hit_point)
 
 # ─────────────────────────────────────────────
 # 枪械动画
@@ -1494,11 +1623,16 @@ func equip_weapon(item: Resource) -> void:
 	magazine_size = item.weapon_magazine
 	reload_time = item.weapon_reload_time
 	spread_base = item.weapon_spread
+	jam_chance = item.weapon_jam_chance if "weapon_jam_chance" in item else 0.0
 	raycast_range = item.weapon_range if "weapon_range" in item else 30.0
-	# Refill ammo
+	# Refill ammo + reset states
 	current_ammo = magazine_size
 	is_reloading = false
+	is_jammed = false
 	can_shoot = true
+	_dmr_streak = 0
+	_sniper_charging = false
+	_sniper_charge = 0.0
 	equipped_weapon_name = item.display_name
 	_current_weapon_id = item.id
 	# 根据武器瞄具高度计算 ADS 位置（瞄具中心对齐屏幕中心 Y=0）
