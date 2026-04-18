@@ -74,6 +74,8 @@ var stamina_bar_bg: ColorRect
 var stamina_bar_fill: ColorRect
 var fade_panel: ColorRect
 var damage_flash: ColorRect
+var weapon_name_label: Label   ## 当前装备武器名
+var slot_bar_labels: Array[Label] = []  ## 武器槽 1-5 指示器
 
 # ─────────────────────────────────────────────
 # 状态
@@ -152,6 +154,51 @@ func _build_hud() -> void:
 	stamina_bar_fill.size = Vector2(100, 6)
 	stamina_bar_fill.position = Vector2(0, 0)
 	stamina_bar_bg.add_child(stamina_bar_fill)
+
+	# ── 武器槽指示器（底部中央）──────────────
+	var slot_bar_bg := ColorRect.new()
+	slot_bar_bg.color = Color(0, 0, 0, 0.0)  # 透明背景
+	slot_bar_bg.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	slot_bar_bg.offset_top = -64
+	slot_bar_bg.offset_bottom = 0
+	add_child(slot_bar_bg)
+
+	var slot_names := ["1:CQC", "2:Short", "3:Mid", "4:Long", "5:Sniper"]
+	var slot_colors := [
+		Color(0.9, 0.45, 0.1),   # 1 CQC — orange
+		Color(0.25, 0.75, 0.95), # 2 Short — cyan
+		Color(0.3, 0.9, 0.35),   # 3 Mid — green
+		Color(0.85, 0.75, 0.2),  # 4 Long — yellow
+		Color(0.7, 0.3, 0.95),   # 5 Sniper — purple
+	]
+	slot_bar_labels.clear()
+	for i in range(5):
+		var lbl := Label.new()
+		lbl.text = slot_names[i]
+		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_color_override("font_color", slot_colors[i].darkened(0.3))
+		lbl.set_anchors_preset(Control.PRESET_CENTER)
+		# 5 slots spread across center, 80px apart
+		lbl.offset_left = (i - 2) * 88 - 36
+		lbl.offset_right = (i - 2) * 88 + 36
+		lbl.offset_top = -54
+		lbl.offset_bottom = -34
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		add_child(lbl)
+		slot_bar_labels.append(lbl)
+
+	# 当前武器名（槽指示器下方）
+	weapon_name_label = Label.new()
+	weapon_name_label.set_anchors_preset(Control.PRESET_CENTER)
+	weapon_name_label.offset_left = -200
+	weapon_name_label.offset_right = 200
+	weapon_name_label.offset_top = -38
+	weapon_name_label.offset_bottom = -16
+	weapon_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	weapon_name_label.add_theme_font_size_override("font_size", 13)
+	weapon_name_label.add_theme_color_override("font_color", Color(0.95, 0.95, 0.95, 0.7))
+	weapon_name_label.text = ""
+	add_child(weapon_name_label)
 
 	# 弹药
 	ammo_label = Label.new()
@@ -402,6 +449,26 @@ func update_extract_bar(progress: float, visible_state: bool) -> void:
 	extract_bar_bg.visible = visible_state
 	if visible_state:
 		extract_bar_fill.size.x = 320.0 * progress
+
+func update_weapon(weapon_name: String, slot: int) -> void:
+	if weapon_name_label:
+		weapon_name_label.text = weapon_name
+	# 高亮当前槽，暗化其他
+	var slot_colors := [
+		Color(0.9, 0.45, 0.1),
+		Color(0.25, 0.75, 0.95),
+		Color(0.3, 0.9, 0.35),
+		Color(0.85, 0.75, 0.2),
+		Color(0.7, 0.3, 0.95),
+	]
+	for i in range(slot_bar_labels.size()):
+		var lbl: Label = slot_bar_labels[i]
+		if i == slot - 1:
+			lbl.add_theme_color_override("font_color", slot_colors[i])
+			lbl.add_theme_font_size_override("font_size", 15)
+		else:
+			lbl.add_theme_color_override("font_color", slot_colors[i].darkened(0.5))
+			lbl.add_theme_font_size_override("font_size", 13)
 
 # ─────────────────────────────────────────────
 # 教程触发通知（由 walk_scene.gd 调用）

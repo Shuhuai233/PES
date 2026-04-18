@@ -183,6 +183,7 @@ func _connect_signals() -> void:
 	player.jam_cleared.connect(_on_jam_cleared)
 	player.shot_fired.connect(_on_shot_fired)
 	player.stamina_changed.connect(ui.update_stamina)
+	player.weapon_changed.connect(ui.update_weapon)
 
 	# Portal signals
 	portal.player_entered_portal.connect(_on_player_entered_portal)

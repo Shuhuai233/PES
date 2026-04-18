@@ -20,12 +20,24 @@ const COLOR_VARIANTS: Array[Color] = [
 	Color(0.15, 0.5, 0.15),  # green heavy
 ]
 
-## Per-variant stat tweaks + archetype + grenade
-## archetype: 0=Rusher, 1=Standard, 2=Heavy
+## Per-variant stat tweaks + archetype + weapon range
+## archetype: 0=Rusher(CQC), 1=Standard(Medium), 2=Heavy(Long)
 const VARIANT_STATS := [
-	{ "speed": 4.0, "sprint": 6.0, "health": 60,  "accuracy": 0.70, "burst": 2, "damage": 10, "archetype": 0, "grenade": false },  # red — Rusher
-	{ "speed": 2.5, "sprint": 5.0, "health": 100, "accuracy": 0.85, "burst": 3, "damage": 8,  "archetype": 1, "grenade": true  },  # blue — Standard
-	{ "speed": 2.0, "sprint": 3.5, "health": 150, "accuracy": 0.75, "burst": 5, "damage": 6,  "archetype": 2, "grenade": false },  # green — Heavy
+	# Red — Rusher: CQC/Short, 霰弹风格
+	{ "speed": 4.0, "sprint": 6.0, "health": 60,  "accuracy": 0.70, "burst": 2, "damage": 22,
+	  "archetype": 0, "grenade": false,
+	  "shoot_range": 12.0, "burst_interval": 0.3,
+	  "gun_color": Color(0.6, 0.15, 0.05), "gun_barrel_len": 0.08 },
+	# Blue — Standard: Medium, 突击步枪风格
+	{ "speed": 2.5, "sprint": 5.0, "health": 100, "accuracy": 0.85, "burst": 3, "damage": 10,
+	  "archetype": 1, "grenade": true,
+	  "shoot_range": 35.0, "burst_interval": 0.18,
+	  "gun_color": Color(0.08, 0.12, 0.22), "gun_barrel_len": 0.18 },
+	# Green — Heavy: Long, DMR风格
+	{ "speed": 2.0, "sprint": 3.5, "health": 150, "accuracy": 0.92, "burst": 1, "damage": 55,
+	  "archetype": 2, "grenade": false,
+	  "shoot_range": 80.0, "burst_interval": 0.6,
+	  "gun_color": Color(0.12, 0.28, 0.10), "gun_barrel_len": 0.30 },
 ]
 
 # ─────────────────────────────────────────────
@@ -125,6 +137,8 @@ func _build_enemy() -> CharacterBody3D:
 	root.set("shoot_damage", stats["damage"])
 	root.set("archetype", stats["archetype"])
 	root.set("has_grenade", stats["grenade"])
+	root.set("shoot_range", stats["shoot_range"])
+	root.set("burst_interval", stats["burst_interval"])
 
 	# Torso (named MeshInstance3D so enemy.gd's @onready finds it)
 	root.add_child(_make_box("MeshInstance3D", Vector3(0.55, 0.65, 0.28), c, Vector3(0, 0.55, 0)))
@@ -140,26 +154,30 @@ func _build_enemy() -> CharacterBody3D:
 	root.add_child(_make_capsule("LegR", 0.1, 0.55, Color(0.15, 0.15, 0.2), Vector3(0.17, 0.0, 0)))
 
 	# ── Gun in right hand ──
-	var gun := _make_gun(c)
+	var gun := _make_gun(c, stats.get("gun_color", Color(0.12, 0.12, 0.12)), stats.get("gun_barrel_len", 0.18))
 	root.add_child(gun)
 
 	return root
 
 # ─────────────────────────────────────────────
 # Gun mesh (held in right hand)
+# p_gun_color: metal color of the gun body (tinted per archetype)
+# p_barrel_len: barrel length — short for shotgun, long for DMR
 # ─────────────────────────────────────────────
-func _make_gun(body_color: Color) -> Node3D:
+func _make_gun(body_color: Color, p_gun_color: Color = Color(0.12, 0.12, 0.12), p_barrel_len: float = 0.18) -> Node3D:
 	var pivot := Node3D.new()
 	pivot.name = "GunPivot"
 	pivot.position = Vector3(0.38, 0.55, -0.18)  # right hand, forward
 
-	# Gun body (dark metal)
+	# Gun body (dark metal with archetype tint)
 	var body := MeshInstance3D.new()
 	body.name = "GunBody"
 	var body_m := BoxMesh.new()
-	body_m.size = Vector3(0.06, 0.08, 0.28)
+	# Barrel-length proportional body size
+	var body_z: float = clamp(p_barrel_len * 0.9, 0.12, 0.32)
+	body_m.size = Vector3(0.06, 0.08, body_z)
 	body.mesh = body_m
-	body.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.12, 0.12, 0.12)))
+	body.set_surface_override_material(0, PSXManager.make_psx_material(p_gun_color))
 	pivot.add_child(body)
 
 	# Magazine / grip
@@ -172,16 +190,16 @@ func _make_gun(body_color: Color) -> Node3D:
 	grip.set_surface_override_material(0, PSXManager.make_psx_material(body_color.darkened(0.5)))
 	pivot.add_child(grip)
 
-	# Barrel
+	# Barrel — length varies by archetype
 	var barrel := MeshInstance3D.new()
 	barrel.name = "Barrel"
 	var barrel_m := CylinderMesh.new()
 	barrel_m.top_radius = 0.015
 	barrel_m.bottom_radius = 0.015
-	barrel_m.height = 0.12
+	barrel_m.height = p_barrel_len
 	barrel.mesh = barrel_m
 	barrel.rotation_degrees = Vector3(90, 0, 0)
-	barrel.position = Vector3(0, 0, -0.2)
+	barrel.position = Vector3(0, 0, -(body_z * 0.5 + p_barrel_len * 0.5))
 	barrel.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.08, 0.08, 0.08)))
 	pivot.add_child(barrel)
 

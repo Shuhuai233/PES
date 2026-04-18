@@ -38,6 +38,8 @@ const RARITY_COLORS: Dictionary = {
 @export var weapon_reload_time: float = 2.0
 @export var weapon_jam_chance: float = 0.12
 @export var weapon_spread: float = 0.0
+@export var weapon_range: float = 30.0    ## raycast distance (meters); default 30m
+@export var weapon_slot: int = 0          ## 1-5 quick-select slot (0 = unassigned)
 
 # ─────────────────────────────────────────────
 # Consumable-only (ignored if category != CONSUMABLE)
