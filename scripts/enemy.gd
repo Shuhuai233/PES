@@ -129,16 +129,23 @@ func _ready() -> void:
 			state = State.SEEK_COVER
 
 	# Debug label (always visible — shows HP/state/weapon)
+	# Rendered on top, bypasses PSX post-process via high render priority + unshaded
 	_debug_label = Label3D.new()
 	_debug_label.name = "DebugLabel"
 	_debug_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_debug_label.font_size = 48
+	_debug_label.pixel_size = 0.003
 	_debug_label.position = Vector3(0, 2.4, 0)
 	_debug_label.no_depth_test = true
-	_debug_label.outline_size = 8
+	_debug_label.outline_size = 12
+	_debug_label.outline_modulate = Color(0, 0, 0, 0.95)
 	_debug_label.modulate = Color.WHITE
-	_debug_label.render_priority = 10
-	_debug_label.visible = true
+	_debug_label.render_priority = 127
+	_debug_label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_debug_label.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	_debug_label.visible = false  # 3D label hidden; 2D overlay in walk_scene handles debug display
+	# 固定大小，不因距离变小
+	_debug_label.fixed_size = true
 	add_child(_debug_label)
 
 	var archetype_names := ["RUSHER", "STANDARD", "HEAVY"]

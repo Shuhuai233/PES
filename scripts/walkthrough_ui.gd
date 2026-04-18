@@ -76,12 +76,16 @@ var fade_panel: ColorRect
 var damage_flash: ColorRect
 var weapon_name_label: Label   ## 当前装备武器名
 var slot_bar_labels: Array[Label] = []  ## 武器槽 1-5 指示器
+var _hotbar_slots: Array[ColorRect] = []  ## Minecraft 风格物品栏格子
+var _hotbar_icons: Array[Label] = []      ## 每个格子里的 icon 文字
+var _hotbar_names: Array[Label] = []      ## 每个格子底部武器名
 
 # ── Debug ──
 var _debug_panel: ColorRect
 var _debug_label: Label
 var _hit_label: Label          ## 命中信息（屏幕中央）
 var _hit_fade_timer: float = 0.0
+var _god_label: Label          ## God Mode 提示
 
 # ─────────────────────────────────────────────
 # 状态
@@ -169,48 +173,88 @@ func _build_hud() -> void:
 	stamina_bar_fill.position = Vector2(0, 0)
 	stamina_bar_bg.add_child(stamina_bar_fill)
 
-	# ── 武器槽指示器（底部中央）──────────────
-	var slot_bar_bg := ColorRect.new()
-	slot_bar_bg.color = Color(0, 0, 0, 0.0)  # 透明背景
-	slot_bar_bg.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	slot_bar_bg.offset_top = -64
-	slot_bar_bg.offset_bottom = 0
-	add_child(slot_bar_bg)
-
-	var slot_names := ["1:CQC", "2:Short", "3:Mid", "4:Long", "5:Sniper"]
+	# ── Minecraft 风格底部快速物品栏 ──────────
+	var slot_names := ["SG", "SMG", "AR", "DMR", "SNP"]
+	var slot_full_names := ["Shotgun", "Compact SMG", "Assault Rifle", "Marksman", "Sniper"]
 	var slot_colors := [
-		Color(0.9, 0.45, 0.1),   # 1 CQC — orange
-		Color(0.25, 0.75, 0.95), # 2 Short — cyan
-		Color(0.3, 0.9, 0.35),   # 3 Mid — green
-		Color(0.85, 0.75, 0.2),  # 4 Long — yellow
-		Color(0.7, 0.3, 0.95),   # 5 Sniper — purple
+		Color(0.9, 0.45, 0.1),
+		Color(0.25, 0.75, 0.95),
+		Color(0.3, 0.9, 0.35),
+		Color(0.85, 0.75, 0.2),
+		Color(0.7, 0.3, 0.95),
 	]
-	slot_bar_labels.clear()
-	for i in range(5):
-		var lbl := Label.new()
-		lbl.text = slot_names[i]
-		lbl.add_theme_font_size_override("font_size", 13)
-		lbl.add_theme_color_override("font_color", slot_colors[i].darkened(0.3))
-		lbl.set_anchors_preset(Control.PRESET_CENTER)
-		# 5 slots spread across center, 80px apart
-		lbl.offset_left = (i - 2) * 88 - 36
-		lbl.offset_right = (i - 2) * 88 + 36
-		lbl.offset_top = -54
-		lbl.offset_bottom = -34
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		add_child(lbl)
-		slot_bar_labels.append(lbl)
+	var slot_w: float = 72.0
+	var slot_h: float = 52.0
+	var slot_gap: float = 4.0
+	var total_w: float = slot_w * 5 + slot_gap * 4
+	var bar_x: float = -total_w * 0.5
 
-	# 当前武器名（槽指示器下方）
+	_hotbar_slots.clear()
+	_hotbar_icons.clear()
+	_hotbar_names.clear()
+	slot_bar_labels.clear()
+
+	for i in range(5):
+		var x_off: float = bar_x + i * (slot_w + slot_gap)
+
+		# 格子背景
+		var slot_bg := ColorRect.new()
+		slot_bg.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		slot_bg.offset_left = x_off
+		slot_bg.offset_right = x_off + slot_w
+		slot_bg.offset_top = -74
+		slot_bg.offset_bottom = -74 + slot_h
+		slot_bg.color = Color(0.08, 0.08, 0.12, 0.75)
+		slot_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(slot_bg)
+		_hotbar_slots.append(slot_bg)
+
+		# 数字标号（左上角）
+		var num_lbl := Label.new()
+		num_lbl.text = str(i + 1)
+		num_lbl.add_theme_font_size_override("font_size", 10)
+		num_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.6))
+		num_lbl.position = Vector2(3, 1)
+		slot_bg.add_child(num_lbl)
+
+		# 武器 icon（居中大字）
+		var icon_lbl := Label.new()
+		icon_lbl.text = slot_names[i]
+		icon_lbl.add_theme_font_size_override("font_size", 16)
+		icon_lbl.add_theme_color_override("font_color", slot_colors[i].darkened(0.15))
+		icon_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+		icon_lbl.offset_top = 4
+		icon_lbl.offset_bottom = -14
+		icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		slot_bg.add_child(icon_lbl)
+		_hotbar_icons.append(icon_lbl)
+
+		# 武器名（底部小字）
+		var name_lbl := Label.new()
+		name_lbl.text = slot_full_names[i]
+		name_lbl.add_theme_font_size_override("font_size", 8)
+		name_lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 0.5))
+		name_lbl.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		name_lbl.offset_top = -13
+		name_lbl.offset_bottom = -1
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		slot_bg.add_child(name_lbl)
+		_hotbar_names.append(name_lbl)
+
+		# 保留 slot_bar_labels 引用以兼容 update_weapon
+		slot_bar_labels.append(icon_lbl)
+
+	# 当前武器名（物品栏上方）
 	weapon_name_label = Label.new()
-	weapon_name_label.set_anchors_preset(Control.PRESET_CENTER)
+	weapon_name_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	weapon_name_label.offset_left = -200
 	weapon_name_label.offset_right = 200
-	weapon_name_label.offset_top = -38
-	weapon_name_label.offset_bottom = -16
+	weapon_name_label.offset_top = -88
+	weapon_name_label.offset_bottom = -74
 	weapon_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	weapon_name_label.add_theme_font_size_override("font_size", 13)
-	weapon_name_label.add_theme_color_override("font_color", Color(0.95, 0.95, 0.95, 0.7))
+	weapon_name_label.add_theme_font_size_override("font_size", 12)
+	weapon_name_label.add_theme_color_override("font_color", Color(0.95, 0.95, 0.95, 0.8))
 	weapon_name_label.text = ""
 	add_child(weapon_name_label)
 
@@ -287,6 +331,20 @@ func _build_hud() -> void:
 	_hit_label.modulate.a = 0.0
 	_hit_label.visible = false
 	add_child(_hit_label)
+
+	# ── God Mode 提示（右上角）────────────────
+	_god_label = Label.new()
+	_god_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_god_label.offset_left = -200
+	_god_label.offset_top = 36
+	_god_label.offset_right = -12
+	_god_label.offset_bottom = 64
+	_god_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_god_label.add_theme_font_size_override("font_size", 18)
+	_god_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.0))
+	_god_label.text = "GOD MODE"
+	_god_label.visible = false
+	add_child(_god_label)
 
 	# 弹药
 	ammo_label = Label.new()
@@ -541,7 +599,7 @@ func update_extract_bar(progress: float, visible_state: bool) -> void:
 func update_weapon(weapon_name: String, slot: int) -> void:
 	if weapon_name_label:
 		weapon_name_label.text = weapon_name
-	# 高亮当前槽，暗化其他
+	# 高亮当前槽格子，暗化其他
 	var slot_colors := [
 		Color(0.9, 0.45, 0.1),
 		Color(0.25, 0.75, 0.95),
@@ -549,14 +607,18 @@ func update_weapon(weapon_name: String, slot: int) -> void:
 		Color(0.85, 0.75, 0.2),
 		Color(0.7, 0.3, 0.95),
 	]
-	for i in range(slot_bar_labels.size()):
-		var lbl: Label = slot_bar_labels[i]
+	for i in range(_hotbar_slots.size()):
+		var bg: ColorRect = _hotbar_slots[i]
+		var icon: Label = _hotbar_icons[i]
 		if i == slot - 1:
-			lbl.add_theme_color_override("font_color", slot_colors[i])
-			lbl.add_theme_font_size_override("font_size", 15)
+			# 选中：亮边框色 + icon 高亮
+			bg.color = Color(slot_colors[i].r * 0.25, slot_colors[i].g * 0.25, slot_colors[i].b * 0.25, 0.9)
+			icon.add_theme_color_override("font_color", slot_colors[i])
+			icon.add_theme_font_size_override("font_size", 20)
 		else:
-			lbl.add_theme_color_override("font_color", slot_colors[i].darkened(0.5))
-			lbl.add_theme_font_size_override("font_size", 13)
+			bg.color = Color(0.08, 0.08, 0.12, 0.55)
+			icon.add_theme_color_override("font_color", slot_colors[i].darkened(0.45))
+			icon.add_theme_font_size_override("font_size", 16)
 
 ## 更新左下角武器 debug 面板
 func update_debug_weapon(info: Dictionary) -> void:
@@ -602,6 +664,10 @@ func show_hit(damage: int, distance: float) -> void:
 	_hit_label.visible = true
 	_hit_label.modulate.a = 1.0
 	_hit_fade_timer = 1.0  # 1秒后淡出
+
+func show_god_mode(enabled: bool) -> void:
+	if _god_label:
+		_god_label.visible = enabled
 
 # ─────────────────────────────────────────────
 # 教程触发通知（由 walk_scene.gd 调用）

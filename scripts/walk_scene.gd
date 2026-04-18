@@ -21,6 +21,11 @@ var max_health: int = 500
 var in_stage: bool = false
 var session_id: String = ""
 var _debug_ai: bool = false
+var _god_mode: bool = false
+
+# ── Enemy debug overlay (2D, above PSX post-process) ──
+var _enemy_debug_layer: CanvasLayer = null
+var _enemy_debug_labels: Dictionary = {}  # enemy instance_id -> Label
 var _navmesh_debug_mesh: MeshInstance3D = null
 var _cover_debug_nodes: Array[Node] = []
 var _cover_debug_refresh_timer: float = 0.0
@@ -42,6 +47,7 @@ func _ready() -> void:
 	_setup_dust_particles()
 	_connect_signals()
 	spawner.deactivate()
+	_setup_enemy_debug_overlay()
 
 func _setup_psx() -> void:
 	var pp_shader := load("res://shaders/psx_postprocess.gdshader") as Shader
@@ -218,14 +224,115 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F3 or event.physical_keycode == KEY_F3:
 			_toggle_debug()
+		if event.keycode == KEY_G or event.physical_keycode == KEY_G:
+			_toggle_god_mode()
 
 func _input(event: InputEvent) -> void:
 	# Backup: also check in _input in case _unhandled_input doesn't fire
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F3 or event.physical_keycode == KEY_F3:
 			_toggle_debug()
+		if event.keycode == KEY_G or event.physical_keycode == KEY_G:
+			_toggle_god_mode()
 
 var _f3_toggled_this_frame: bool = false
+var _god_toggled_this_frame: bool = false
+
+func _toggle_god_mode() -> void:
+	if _god_toggled_this_frame:
+		return
+	_god_toggled_this_frame = true
+	call_deferred("_reset_god_toggle")
+	_god_mode = not _god_mode
+	if _god_mode:
+		player_health = max_health
+		ui.update_health(player_health)
+	ui.show_god_mode(_god_mode)
+	print("[Debug] God Mode: %s" % ("ON" if _god_mode else "OFF"))
+
+func _reset_god_toggle() -> void:
+	_god_toggled_this_frame = false
+
+# ─────────────────────────────────────────────
+# Enemy debug overlay (2D CanvasLayer, renders ABOVE PSX post-process)
+# ─────────────────────────────────────────────
+func _setup_enemy_debug_overlay() -> void:
+	_enemy_debug_layer = CanvasLayer.new()
+	_enemy_debug_layer.name = "EnemyDebugOverlay"
+	_enemy_debug_layer.layer = 20  # above everything including PSX post-process
+	add_child(_enemy_debug_layer)
+
+func _update_enemy_debug_overlay() -> void:
+	if _enemy_debug_layer == null:
+		return
+	var cam: Camera3D = player.camera
+	if cam == null:
+		return
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+
+	# Track which enemies are still alive
+	var alive_ids: Dictionary = {}
+
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(enemy) or enemy.is_dead:
+			continue
+		var eid: int = enemy.get_instance_id()
+		alive_ids[eid] = true
+
+		# Get screen position
+		var head_pos: Vector3 = enemy.global_position + Vector3(0, 2.2, 0)
+		if not cam.is_position_behind(head_pos):
+			var screen_pos: Vector2 = cam.unproject_position(head_pos)
+			# Clamp to viewport
+			if screen_pos.x > -100 and screen_pos.x < viewport_size.x + 100 and screen_pos.y > -100 and screen_pos.y < viewport_size.y + 100:
+				var lbl: Label
+				if _enemy_debug_labels.has(eid):
+					lbl = _enemy_debug_labels[eid]
+				else:
+					lbl = Label.new()
+					lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+					lbl.add_theme_font_size_override("font_size", 13)
+					lbl.add_theme_color_override("font_color", Color(1, 1, 0.2))
+					lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+					lbl.add_theme_constant_override("outline_size", 3)
+					_enemy_debug_layer.add_child(lbl)
+					_enemy_debug_labels[eid] = lbl
+				lbl.visible = true
+				lbl.position = Vector2(screen_pos.x - 60, screen_pos.y - 30)
+
+				# Build text
+				var state_name: String = "?"
+				if enemy.has_method("get_state"):
+					var st: int = enemy.get_state()
+					var state_names := ["SEEK", "COVER", "PEEK", "RUSH", "RETREAT", "FLANK"]
+					if st >= 0 and st < state_names.size():
+						state_name = state_names[st]
+				var arch_names := ["RUSH", "STD", "HEAVY"]
+				var arch_str: String = arch_names[enemy.archetype] if enemy.archetype < arch_names.size() else "?"
+				var hp_pct: int = int(float(enemy.health) / float(enemy.max_health) * 100.0)
+				var weapon_str: String = "SG" if enemy.shoot_range <= 15.0 else ("AR" if enemy.shoot_range <= 40.0 else "DMR")
+				var dist_to_player: float = player.global_position.distance_to(enemy.global_position)
+				lbl.text = "%s [%s] %d%%\n%s dmg:%d  %.0fm" % [state_name, arch_str, hp_pct, weapon_str, enemy.shoot_damage, dist_to_player]
+
+				# Color by HP
+				var t: float = float(enemy.health) / float(enemy.max_health)
+				lbl.add_theme_color_override("font_color", Color(1.0, t, t * 0.2))
+			else:
+				if _enemy_debug_labels.has(eid):
+					_enemy_debug_labels[eid].visible = false
+		else:
+			if _enemy_debug_labels.has(eid):
+				_enemy_debug_labels[eid].visible = false
+
+	# Remove labels for dead enemies
+	var to_remove: Array = []
+	for eid: int in _enemy_debug_labels:
+		if not alive_ids.has(eid):
+			to_remove.append(eid)
+	for eid: int in to_remove:
+		if is_instance_valid(_enemy_debug_labels[eid]):
+			_enemy_debug_labels[eid].queue_free()
+		_enemy_debug_labels.erase(eid)
 func _toggle_debug() -> void:
 	# Prevent double-toggle from both _input and _unhandled_input
 	if _f3_toggled_this_frame:
@@ -445,6 +552,16 @@ func _process(_delta: float) -> void:
 
 	ui.show_reload(player.is_reloading)
 
+	# ── God Mode: 无限弹药，自动清卡壳 ──
+	if _god_mode:
+		if player.current_ammo < player.magazine_size:
+			player.current_ammo = player.magazine_size
+			player.ammo_changed.emit(player.current_ammo, player.magazine_size)
+		if player.is_jammed:
+			player.is_jammed = false
+			player.can_shoot = true
+			player.jam_cleared.emit()
+
 	# ── Debug 面板每帧更新 ────────────────────
 	var ammo_data: Dictionary = player.get_ammo_data()
 	ui.update_debug_weapon({
@@ -462,6 +579,9 @@ func _process(_delta: float) -> void:
 		"jammed":        ammo_data.get("jammed", false),
 		"reloading":     ammo_data.get("reloading", false),
 	})
+
+	# ── 敌人2D debug标签更新 ──────────────────
+	_update_enemy_debug_overlay()
 
 # ─────────────────────────────────────────────
 # Callbacks — combat
@@ -564,6 +684,8 @@ func _portal_fov_warp() -> void:
 # Damage / Death
 # ─────────────────────────────────────────────
 func take_damage(amount: int) -> void:
+	if _god_mode:
+		return
 	player_health = max(0, player_health - amount)
 	ui.update_health(player_health)
 	SessionManager.set_value("damage_taken",
