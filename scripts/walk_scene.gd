@@ -661,14 +661,12 @@ func _on_headshot(_enemy: Node) -> void:
 		ui.show_headshot_marker()
 
 func _on_weapon_jammed() -> void:
-	if ui and ui.has_method("show_jam_warning"):
-		# jam_warning label 已经在 UI 里构建好了
-		var jw := ui.get("jam_warning")
-		if jw and jw is Label:
-			jw.visible = true
-			var tw := create_tween()
-			tw.tween_interval(0.5)
-			tw.tween_callback(func(): if is_instance_valid(jw): jw.visible = false)
+	var jw: Label = ui.get_node_or_null("JamWarning") as Label
+	if jw:
+		jw.visible = true
+		var tw := create_tween()
+		tw.tween_interval(0.5)
+		tw.tween_callback(func(): if is_instance_valid(jw): jw.visible = false)
 
 # ─────────────────────────────────────────────
 # Callbacks — loot & inventory
