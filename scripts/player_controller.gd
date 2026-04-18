@@ -876,6 +876,16 @@ func _update_fov(delta: float) -> void:
 func _update_weapon_bob(delta: float) -> void:
 	if gun_pivot == null:
 		return
+
+	# ── ADS 完全就位时，强制锁定位置和旋转，无视一切 bob/tween ──
+	if is_aiming and ads_alpha > 0.98:
+		gun_pivot.position = GUN_ADS_POS
+		gun_pivot.rotation_degrees = Vector3.ZERO
+		bob_origin = GUN_ADS_POS
+		bob_time = 0.0
+		camera.rotation_degrees.z = lerp(camera.rotation_degrees.z, 0.0, delta * 10.0)
+		return
+
 	var speed := velocity.length()
 	var sprinting := is_sprinting()
 
@@ -910,11 +920,7 @@ func _update_weapon_bob(delta: float) -> void:
 			camera.rotation_degrees.z = lerp(camera.rotation_degrees.z, 0.0, delta * 6.0)
 	else:
 		bob_time = 0.0
-		# ADS 时直接 snap 到目标位置（避免 lerp 指数衰减永远到不了 X=0）
-		if is_aiming and ads_alpha > 0.95:
-			gun_pivot.position = bob_origin
-		else:
-			gun_pivot.position = gun_pivot.position.lerp(bob_origin, delta * 10.0)
+		gun_pivot.position = gun_pivot.position.lerp(bob_origin, delta * 10.0)
 		camera.rotation_degrees.z = lerp(camera.rotation_degrees.z, 0.0, delta * 6.0)
 
 	# 落地冲击检测
@@ -1091,14 +1097,21 @@ func _try_shoot() -> void:
 			raycast.target_position = Vector3(0, 0, ray_z)
 
 	# 射线检测命中
+	var hit_point: Vector3
 	if raycast and raycast.is_colliding():
+		hit_point = raycast.get_collision_point()
 		var collider := raycast.get_collider()
 		if collider and collider.is_in_group("enemies"):
 			enemy_hit.emit(collider)
 			if collider.has_method("take_damage"):
 				collider.take_damage(damage_per_shot)
-			# Hit splatter particles at impact point
-			_spawn_hit_particles(raycast.get_collision_point(), raycast.get_collision_normal())
+			_spawn_hit_particles(hit_point, raycast.get_collision_normal())
+	else:
+		# 未命中：弹道终点为射线最远端
+		hit_point = camera.global_position + camera.global_basis * raycast.target_position
+
+	# 弹道 tracer
+	_spawn_tracer(hit_point)
 
 # ─────────────────────────────────────────────
 # 枪械动画
@@ -1106,10 +1119,12 @@ func _try_shoot() -> void:
 func _kick_gun(_unused: bool = false) -> void:
 	if gun_pivot == null:
 		return
+	# ADS 完全就位时跳过 tween（位置由 _update_weapon_bob 强制锁定）
+	if is_aiming and ads_alpha > 0.98:
+		return
 	var tween := create_tween()
 	var kick_pos := bob_origin + Vector3(0, recoil_kick_pos * 0.5, recoil_kick_pos)
 	var rot_v := -recoil_kick_rot
-	# ADS 时减少视觉踢，且不做水平旋转（保持瞄准线稳定）
 	var rot_h: float = 0.0
 	if is_aiming:
 		rot_v *= 0.4
@@ -1117,6 +1132,8 @@ func _kick_gun(_unused: bool = false) -> void:
 		rot_h = randf_range(-1.5, 1.5)
 	tween.tween_property(gun_pivot, "position", kick_pos, 0.04)
 	tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, 0), 0.04)
+	tween.tween_property(gun_pivot, "position", bob_origin, 0.1)
+	tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.1)
 	tween.tween_property(gun_pivot, "position", bob_origin, 0.1)
 	tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.1)
 
@@ -1213,6 +1230,37 @@ func _spawn_hit_particles(hit_pos: Vector3, hit_normal: Vector3) -> void:
 		tw.tween_property(particle, "global_position", end_pos, randf_range(0.15, 0.3))
 		tw.parallel().tween_property(particle, "scale", Vector3.ZERO, 0.3)
 		tw.tween_callback(particle.queue_free)
+
+# ─────────────────────────────────────────────
+# 弹道 tracer（可见弹丸轨迹）
+# ─────────────────────────────────────────────
+func _spawn_tracer(hit_point: Vector3) -> void:
+	if camera == null:
+		return
+	var muzzle_pos := camera.global_position + camera.global_basis * Vector3(0.15, -0.1, -0.5)
+	var dir := (hit_point - muzzle_pos)
+	var dist := dir.length()
+	if dist < 0.5:
+		return
+
+	# 弹丸（小长条，亮黄色）
+	var tracer := MeshInstance3D.new()
+	var tm := BoxMesh.new()
+	var tracer_len: float = minf(dist, 2.0)
+	tm.size = Vector3(0.01, 0.01, tracer_len)
+	tracer.mesh = tm
+	tracer.set_surface_override_material(0, PSXManager.make_psx_material(Color(1.0, 0.9, 0.4)))
+	get_tree().current_scene.add_child(tracer)
+
+	# 朝向命中点
+	tracer.global_position = muzzle_pos
+	tracer.look_at(hit_point, Vector3.UP)
+
+	# 飞行动画：从枪口到命中点
+	var fly_time: float = clampf(dist / 120.0, 0.02, 0.15)  # ~120 m/s 弹速
+	var tw := tracer.create_tween()
+	tw.tween_property(tracer, "global_position", hit_point, fly_time)
+	tw.tween_callback(tracer.queue_free)
 
 # ─────────────────────────────────────────────
 # Weapon equip (from inventory)
