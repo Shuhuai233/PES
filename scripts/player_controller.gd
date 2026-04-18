@@ -72,13 +72,13 @@ const QUICK_SLOT_IDS: Array[StringName] = [
 @export var landing_impact_speed: float = 6.0       ## 落地冲击传导给镜头的速度系数
 
 @export_group("Recoil")
-@export var recoil_vertical: float = 1.8         ## 每发镜头上抬角度（度）
-@export var recoil_horizontal: float = 0.5       ## 每发随机水平偏移范围（度）
-@export var recoil_recovery_speed: float = 5.0   ## 后坐力恢复速度
-@export var recoil_max_vertical: float = 10.0    ## 最大累计垂直后坐力（度）
+@export var recoil_vertical: float = 2.5         ## 每发镜头上抬角度（度）
+@export var recoil_horizontal: float = 0.6       ## 每发随机水平偏移范围（度）
+@export var recoil_recovery_speed: float = 4.0   ## 后坐力恢复速度
+@export var recoil_max_vertical: float = 14.0    ## 最大累计垂直后坐力（度）
 @export var recoil_kick_pos: float = 0.04        ## 枪械模型向后位移量（纯视觉）
 @export var recoil_kick_rot: float = 5.0         ## 枪械模型旋转踢角度（纯视觉，度）
-@export var recoil_apply_speed: float = 15.0     ## 后坐力施加到镜头的速度
+@export var recoil_apply_speed: float = 18.0     ## 后坐力施加到镜头的速度
 @export var jam_kick_rot: float = 8.0            ## 卡壳时枪械旋转角度（度）
 
 @export_group("Spread / Accuracy")
@@ -963,23 +963,24 @@ func _apply_recoil() -> void:
 	_recoil_pending_h += h_kick
 
 func _update_recoil(delta: float) -> void:
-	# ── 第一阶段：平滑施加 pending recoil 到镜头（快速上抬）──
+	# ── 第一阶段：平滑施加 pending recoil 到镜头（向上抬）──
 	if _recoil_pending_v > 0.001 or abs(_recoil_pending_h) > 0.001:
 		var apply_v: float = _recoil_pending_v * minf(1.0, delta * recoil_apply_speed)
 		var apply_h: float = _recoil_pending_h * minf(1.0, delta * recoil_apply_speed)
-		head.rotation.x -= deg_to_rad(apply_v)
+		# rotate_x 正值 = 向上看（与鼠标输入一致），所以后坐力用正值
+		head.rotate_x(deg_to_rad(apply_v))
 		head.rotation.x = clamp(head.rotation.x, deg_to_rad(-85), deg_to_rad(85))
 		rotate_y(deg_to_rad(apply_h))
 		_recoil_pending_v -= apply_v
 		_recoil_pending_h -= apply_h
 		recoil_current_v = clampf(recoil_current_v + apply_v, 0.0, recoil_max_vertical)
 		recoil_current_h += apply_h
-		return  # 施加中不恢复，让后坐力先完整抬起
+		return  # 施加中不恢复
 
-	# ── 第二阶段：pending 消耗完后缓慢恢复（下拉回原位）──
+	# ── 第二阶段：缓慢恢复（向下拉回原位）──
 	if recoil_current_v > 0.001:
 		var step_v := recoil_current_v * delta * recoil_recovery_speed
-		head.rotation.x += deg_to_rad(step_v)
+		head.rotate_x(-deg_to_rad(step_v))
 		head.rotation.x = clamp(head.rotation.x, deg_to_rad(-85), deg_to_rad(85))
 		recoil_current_v = move_toward(recoil_current_v, 0.0, step_v)
 	if abs(recoil_current_h) > 0.001:
@@ -1195,9 +1196,69 @@ func _finish_reload() -> void:
 func _flash_muzzle() -> void:
 	if muzzle_flash:
 		muzzle_flash.visible = true
+		# 把 muzzle light 移到实际枪口位置
+		muzzle_flash.position = _get_muzzle_local_pos()
 		await get_tree().create_timer(muzzle_flash_duration).timeout
 		if is_instance_valid(muzzle_flash):
 			muzzle_flash.visible = false
+	# 枪口火焰粒子（可见的闪光）
+	_spawn_muzzle_flash_fx()
+
+## 获取枪口在 camera 本地空间的位置
+func _get_muzzle_local_pos() -> Vector3:
+	if gun_pivot == null:
+		return Vector3(0.15, -0.1, -0.5)
+	# 枪管末端在 gun_pivot 空间的 Z 位置（各武器不同）
+	var barrel_z: float = -0.55
+	match _current_weapon_id:
+		&"shotgun_cqc": barrel_z = -0.53
+		&"smg_short": barrel_z = -0.42
+		&"ar_medium": barrel_z = -0.65
+		&"dmr_long": barrel_z = -0.81
+		&"sniper_disc": barrel_z = -0.96
+	# gun_pivot.position 是 camera local，加上枪管 Z
+	return gun_pivot.position + Vector3(0, 0.02, barrel_z)
+
+## 获取枪口世界坐标
+func _get_muzzle_world_pos() -> Vector3:
+	if camera == null:
+		return global_position
+	return camera.global_position + camera.global_basis * _get_muzzle_local_pos()
+
+## 枪口火焰可见效果
+func _spawn_muzzle_flash_fx() -> void:
+	var flash_pos := _get_muzzle_world_pos()
+	# 闪光主体（亮黄色方块，快速闪烁）
+	var flash := MeshInstance3D.new()
+	var fm := BoxMesh.new()
+	var flash_size := randf_range(0.04, 0.08)
+	fm.size = Vector3(flash_size, flash_size, flash_size * 1.5)
+	flash.mesh = fm
+	flash.set_surface_override_material(0, PSXManager.make_psx_material(Color(1.0, 0.85, 0.3)))
+	get_tree().current_scene.add_child(flash)
+	flash.global_position = flash_pos
+	flash.look_at(flash_pos + camera.global_basis * Vector3.FORWARD, Vector3.UP)
+	flash.rotation_degrees.z = randf() * 360  # 随机旋转
+	# 快速闪烁消失
+	var tw := flash.create_tween()
+	tw.tween_property(flash, "scale", Vector3.ZERO, 0.06)
+	tw.tween_callback(flash.queue_free)
+	# 小火花（2-3 个）
+	for i in randi_range(2, 3):
+		var spark := MeshInstance3D.new()
+		var sm := BoxMesh.new()
+		sm.size = Vector3(0.008, 0.008, 0.025)
+		spark.mesh = sm
+		spark.set_surface_override_material(0, PSXManager.make_psx_material(Color(1.0, 0.7, 0.2)))
+		get_tree().current_scene.add_child(spark)
+		spark.global_position = flash_pos
+		var spark_dir := camera.global_basis * Vector3(
+			randf_range(-0.3, 0.3), randf_range(-0.3, 0.3), -1.0).normalized()
+		var stw := spark.create_tween()
+		stw.tween_property(spark, "global_position",
+			flash_pos + spark_dir * randf_range(0.1, 0.25), 0.08)
+		stw.tween_property(spark, "scale", Vector3.ZERO, 0.04)
+		stw.tween_callback(spark.queue_free)
 
 # ─────────────────────────────────────────────
 # 弹壳抛出
@@ -1336,7 +1397,7 @@ func _spawn_impact_debris(hit_pos: Vector3, hit_normal: Vector3) -> void:
 func _spawn_tracer(hit_point: Vector3) -> void:
 	if camera == null:
 		return
-	var muzzle_pos := camera.global_position + camera.global_basis * Vector3(0.15, -0.1, -0.5)
+	var muzzle_pos := _get_muzzle_world_pos()
 	var dir := (hit_point - muzzle_pos)
 	var dist := dir.length()
 	if dist < 0.5:
