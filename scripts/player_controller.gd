@@ -72,13 +72,14 @@ const QUICK_SLOT_IDS: Array[StringName] = [
 @export var landing_impact_speed: float = 6.0       ## 落地冲击传导给镜头的速度系数
 
 @export_group("Recoil")
-@export var recoil_vertical: float = 1.5         ## 每发上抬角度（度）— Marathon 风格较强
-@export var recoil_horizontal: float = 0.4       ## 每发随机水平偏移范围（度）
-@export var recoil_recovery_speed: float = 12.0  ## 后坐力恢复速度（快恢复 = 手感干脆）
-@export var recoil_max_vertical: float = 10.0    ## 最大累计垂直后坐力（度）
-@export var recoil_kick_pos: float = 0.035       ## 枪械向后位移量（更有冲击感）
-@export var recoil_kick_rot: float = 10.0        ## 枪械旋转踢脚角度（度）
-@export var jam_kick_rot: float = 15.0           ## 卡壳时枪械旋转角度（度）
+@export var recoil_vertical: float = 0.8         ## 每发镜头上抬角度（度）— 平滑施加
+@export var recoil_horizontal: float = 0.25      ## 每发随机水平偏移范围（度）
+@export var recoil_recovery_speed: float = 6.0   ## 后坐力恢复速度
+@export var recoil_max_vertical: float = 6.0     ## 最大累计垂直后坐力（度）
+@export var recoil_kick_pos: float = 0.03        ## 枪械模型向后位移量（纯视觉）
+@export var recoil_kick_rot: float = 4.0         ## 枪械模型旋转踢角度（纯视觉，度）
+@export var recoil_apply_speed: float = 20.0     ## 后坐力施加到镜头的速度（越大越跟手）
+@export var jam_kick_rot: float = 8.0            ## 卡壳时枪械旋转角度（度）
 
 @export_group("Spread / Accuracy")
 @export var spread_base: float = 0.0           ## 静止精度偏移（单位：米，以30m处为基准）
@@ -129,9 +130,11 @@ var current_quick_slot: int = -1
 # 当前装备的武器名（用于 HUD 显示）
 var equipped_weapon_name: String = ""
 
-# 后坐力
-var recoil_current_v: float = 0.0
+# 后坐力（平滑施加，非瞬时抖动）
+var recoil_current_v: float = 0.0   # 已施加到镜头、待恢复的量
 var recoil_current_h: float = 0.0
+var _recoil_pending_v: float = 0.0  # 尚未施加到镜头的量（平滑消耗）
+var _recoil_pending_h: float = 0.0
 
 # 扩散
 var current_spread: float = 0.0
@@ -199,8 +202,8 @@ func _ready() -> void:
 # ─────────────────────────────────────────────
 # Hip-fire 位置（枪在画面右下角，占屏幕 ~30-35%）
 const GUN_HIP_POS := Vector3(0.32, -0.28, -0.50)
-# ADS 位置（枪居中对齐准星）
-const GUN_ADS_POS := Vector3(0.0, -0.16, -0.42)
+# ADS 位置（枪居中，瞄具对齐屏幕中心准星）
+const GUN_ADS_POS := Vector3(0.0, -0.10, -0.42)
 
 func _build_gun() -> void:
 	gun_pivot = Node3D.new()
@@ -215,118 +218,79 @@ func _build_gun() -> void:
 	# 创建狙击镜黑边遮罩（默认隐藏）
 	_build_scope_overlay()
 
-## 构建手臂+手掌（挂在 gun_pivot 下，跟随枪械移动）
-## left_pos: 左手在 gun_pivot 坐标系中抓握位置（护手/泵）
-## right_pos: 右手在 gun_pivot 坐标系中抓握位置（握把顶端）
+## 构建手臂（挂在 gun_pivot 下，跟随枪械移动）
+## 简洁风格：袖口上臂 + 肤色前臂 + 手套拳头（一体成型，不做单独手指）
 func _add_arms(left_pos: Vector3, right_pos: Vector3) -> void:
 	var skin_col := Color(0.72, 0.55, 0.42)
-	var skin_dark := Color(0.62, 0.45, 0.35)
-	var sleeve_col := Color(0.18, 0.20, 0.18)  # 暗绿色袖口
+	var glove_col := Color(0.15, 0.15, 0.14)    # 黑色战术手套
+	var sleeve_col := Color(0.18, 0.20, 0.18)    # 暗绿色袖口
 
 	# ── 右手臂（握把手）──
 	var r_arm := Node3D.new()
 	r_arm.name = "ArmR"
 	gun_pivot.add_child(r_arm)
-	# 上臂
+	# 上臂（袖口）
 	var r_upper := MeshInstance3D.new()
 	var r_up_m := CapsuleMesh.new()
-	r_up_m.radius = 0.042
-	r_up_m.height = 0.26
+	r_up_m.radius = 0.045
+	r_up_m.height = 0.28
 	r_upper.mesh = r_up_m
 	r_upper.set_surface_override_material(0, PSXManager.make_psx_material(sleeve_col))
-	r_upper.rotation_degrees = Vector3(55, -15, -8)
-	r_upper.position = right_pos + Vector3(0.06, 0.08, 0.16)
+	r_upper.rotation_degrees = Vector3(60, -12, -5)
+	r_upper.position = right_pos + Vector3(0.05, 0.10, 0.18)
 	r_arm.add_child(r_upper)
-	# 前臂
+	# 前臂（肤色）
 	var r_fore := MeshInstance3D.new()
 	var r_fo_m := CapsuleMesh.new()
-	r_fo_m.radius = 0.038
-	r_fo_m.height = 0.22
+	r_fo_m.radius = 0.04
+	r_fo_m.height = 0.20
 	r_fore.mesh = r_fo_m
 	r_fore.set_surface_override_material(0, PSXManager.make_psx_material(skin_col))
-	r_fore.rotation_degrees = Vector3(75, -10, -5)
-	r_fore.position = right_pos + Vector3(0.03, 0.02, 0.06)
+	r_fore.rotation_degrees = Vector3(70, -8, 0)
+	r_fore.position = right_pos + Vector3(0.03, 0.03, 0.08)
 	r_arm.add_child(r_fore)
-	# 手掌（握把上的拳头）
-	var r_hand := MeshInstance3D.new()
-	var r_hm := BoxMesh.new()
-	r_hm.size = Vector3(0.06, 0.07, 0.08)
-	r_hand.mesh = r_hm
-	r_hand.set_surface_override_material(0, PSXManager.make_psx_material(skin_col))
-	r_hand.position = right_pos + Vector3(0.01, -0.02, 0.0)
-	r_hand.rotation_degrees = Vector3(-12, 0, 0)
-	r_arm.add_child(r_hand)
-	# 手指（包裹握把的弯曲指节）
-	for fi in range(4):
-		var finger := MeshInstance3D.new()
-		var fm := BoxMesh.new()
-		fm.size = Vector3(0.014, 0.035, 0.05)
-		finger.mesh = fm
-		finger.set_surface_override_material(0, PSXManager.make_psx_material(skin_dark))
-		finger.position = right_pos + Vector3(-0.025 + fi * 0.016, -0.05, -0.01)
-		finger.rotation_degrees = Vector3(-30, 0, 0)
-		r_arm.add_child(finger)
-	# 拇指
-	var r_thumb := MeshInstance3D.new()
-	var r_tm := BoxMesh.new()
-	r_tm.size = Vector3(0.04, 0.02, 0.05)
-	r_thumb.mesh = r_tm
-	r_thumb.set_surface_override_material(0, PSXManager.make_psx_material(skin_dark))
-	r_thumb.position = right_pos + Vector3(0.04, -0.02, -0.02)
-	r_thumb.rotation_degrees = Vector3(-15, 0, -20)
-	r_arm.add_child(r_thumb)
+	# 手套拳头（一体成型）
+	var r_fist := MeshInstance3D.new()
+	var r_fm := BoxMesh.new()
+	r_fm.size = Vector3(0.065, 0.06, 0.08)
+	r_fist.mesh = r_fm
+	r_fist.set_surface_override_material(0, PSXManager.make_psx_material(glove_col))
+	r_fist.position = right_pos + Vector3(0.01, -0.01, 0.0)
+	r_fist.rotation_degrees = Vector3(-10, 0, 0)
+	r_arm.add_child(r_fist)
 
-	# ── 左手臂（护手/前握把手）──
+	# ── 左手臂（护手手）──
 	var l_arm := Node3D.new()
 	l_arm.name = "ArmL"
 	gun_pivot.add_child(l_arm)
-	# 上臂
+	# 上臂（袖口）
 	var l_upper := MeshInstance3D.new()
 	var l_up_m := CapsuleMesh.new()
-	l_up_m.radius = 0.042
-	l_up_m.height = 0.26
+	l_up_m.radius = 0.045
+	l_up_m.height = 0.28
 	l_upper.mesh = l_up_m
 	l_upper.set_surface_override_material(0, PSXManager.make_psx_material(sleeve_col))
-	l_upper.rotation_degrees = Vector3(55, 15, 8)
-	l_upper.position = left_pos + Vector3(-0.06, 0.08, 0.16)
+	l_upper.rotation_degrees = Vector3(60, 12, 5)
+	l_upper.position = left_pos + Vector3(-0.05, 0.10, 0.18)
 	l_arm.add_child(l_upper)
-	# 前臂
+	# 前臂（肤色）
 	var l_fore := MeshInstance3D.new()
 	var l_fo_m := CapsuleMesh.new()
-	l_fo_m.radius = 0.038
-	l_fo_m.height = 0.22
+	l_fo_m.radius = 0.04
+	l_fo_m.height = 0.20
 	l_fore.mesh = l_fo_m
 	l_fore.set_surface_override_material(0, PSXManager.make_psx_material(skin_col))
-	l_fore.rotation_degrees = Vector3(75, 10, 5)
-	l_fore.position = left_pos + Vector3(-0.03, 0.02, 0.06)
+	l_fore.rotation_degrees = Vector3(70, 8, 0)
+	l_fore.position = left_pos + Vector3(-0.03, 0.03, 0.08)
 	l_arm.add_child(l_fore)
-	# 手掌（握护手的手）
-	var l_hand := MeshInstance3D.new()
-	var l_hm := BoxMesh.new()
-	l_hm.size = Vector3(0.06, 0.065, 0.09)
-	l_hand.mesh = l_hm
-	l_hand.set_surface_override_material(0, PSXManager.make_psx_material(skin_col))
-	l_hand.position = left_pos + Vector3(-0.01, -0.02, 0.0)
-	l_arm.add_child(l_hand)
-	# 手指（包裹护手）
-	for fi in range(4):
-		var finger := MeshInstance3D.new()
-		var fm := BoxMesh.new()
-		fm.size = Vector3(0.014, 0.035, 0.05)
-		finger.mesh = fm
-		finger.set_surface_override_material(0, PSXManager.make_psx_material(skin_dark))
-		finger.position = left_pos + Vector3(0.025 - fi * 0.016, -0.05, -0.01)
-		finger.rotation_degrees = Vector3(-25, 0, 0)
-		l_arm.add_child(finger)
-	# 拇指
-	var l_thumb := MeshInstance3D.new()
-	var l_tm := BoxMesh.new()
-	l_tm.size = Vector3(0.04, 0.02, 0.05)
-	l_thumb.mesh = l_tm
-	l_thumb.set_surface_override_material(0, PSXManager.make_psx_material(skin_dark))
-	l_thumb.position = left_pos + Vector3(-0.04, -0.02, -0.02)
-	l_thumb.rotation_degrees = Vector3(-15, 0, 20)
-	l_arm.add_child(l_thumb)
+	# 手套拳头（一体成型）
+	var l_fist := MeshInstance3D.new()
+	var l_fm := BoxMesh.new()
+	l_fm.size = Vector3(0.065, 0.055, 0.09)
+	l_fist.mesh = l_fm
+	l_fist.set_surface_override_material(0, PSXManager.make_psx_material(glove_col))
+	l_fist.position = left_pos + Vector3(-0.01, -0.01, 0.0)
+	l_arm.add_child(l_fist)
 
 ## 添加机械瞄具（前准星 + 后照门），适用于无光学瞄具的武器
 ## front_z: 前准星 Z 位置, rear_z: 后照门 Z 位置, top_y: 瞄具顶部 Y
@@ -874,7 +838,7 @@ func _update_weapon_bob(delta: float) -> void:
 		fall_velocity = velocity.y
 
 # ─────────────────────────────────────────────
-# 后坐力（摄像机旋转叠加）
+# 后坐力（平滑施加到镜头 + 枪模视觉踢）
 # ─────────────────────────────────────────────
 func _apply_recoil() -> void:
 	var v_kick := recoil_vertical
@@ -883,22 +847,29 @@ func _apply_recoil() -> void:
 	if is_aiming:
 		v_kick *= 0.5
 		h_kick *= 0.4
-	# 直接立刻旋转摄像机（瞬时踢）
-	head.rotation.x -= deg_to_rad(v_kick)
-	head.rotation.x = clamp(head.rotation.x, deg_to_rad(-85), deg_to_rad(85))
-	rotate_y(deg_to_rad(h_kick))
-	# 累计待恢复量
-	recoil_current_v = clamp(recoil_current_v + v_kick, 0.0, recoil_max_vertical)
-	recoil_current_h += h_kick
+	# 累积到待施加队列（不直接旋转镜头，避免抖动）
+	_recoil_pending_v += v_kick
+	_recoil_pending_h += h_kick
 
 func _update_recoil(delta: float) -> void:
-	# 垂直恢复（往下拉回）
+	# ── 第一阶段：平滑施加 pending recoil 到镜头 ──
+	if _recoil_pending_v > 0.001 or abs(_recoil_pending_h) > 0.001:
+		var apply_v := _recoil_pending_v * min(1.0, delta * recoil_apply_speed)
+		var apply_h := _recoil_pending_h * min(1.0, delta * recoil_apply_speed)
+		head.rotation.x -= deg_to_rad(apply_v)
+		head.rotation.x = clamp(head.rotation.x, deg_to_rad(-85), deg_to_rad(85))
+		rotate_y(deg_to_rad(apply_h))
+		_recoil_pending_v -= apply_v
+		_recoil_pending_h -= apply_h
+		recoil_current_v = clamp(recoil_current_v + apply_v, 0.0, recoil_max_vertical)
+		recoil_current_h += apply_h
+
+	# ── 第二阶段：缓慢恢复已施加的后坐力 ──
 	if recoil_current_v > 0.001:
 		var step_v := recoil_current_v * delta * recoil_recovery_speed
 		head.rotation.x += deg_to_rad(step_v)
 		head.rotation.x = clamp(head.rotation.x, deg_to_rad(-85), deg_to_rad(85))
 		recoil_current_v = move_toward(recoil_current_v, 0.0, step_v)
-	# 水平恢复
 	if abs(recoil_current_h) > 0.001:
 		var step_h := recoil_current_h * delta * recoil_recovery_speed
 		rotate_y(deg_to_rad(-step_h))
@@ -1162,6 +1133,9 @@ func equip_weapon(item: Resource) -> void:
 	_show_scope_overlay(false)
 	if gun_pivot:
 		gun_pivot.visible = true
+		for child in gun_pivot.get_children():
+			if child is Node3D or child is MeshInstance3D:
+				child.visible = true
 	# Update gun stats from item data
 	damage_per_shot = item.damage
 	shoot_cooldown = item.fire_rate
@@ -1219,17 +1193,24 @@ func _update_ads(delta: float) -> void:
 		# 只在非 bob 动画时更新 bob_origin，bob 动画会自己处理
 		bob_origin = target_pos
 
-	# 狙击镜特殊处理：高倍率 ADS 时显示黑边遮罩 + 隐藏枪模
+	# 狙击镜特殊处理：高倍率 ADS 时显示黑边遮罩，隐藏大部分枪体但保留枪管
 	if _is_sniper():
 		var sniper_threshold := 0.85
 		if ads_alpha > sniper_threshold:
 			_show_scope_overlay(true)
+			# 隐藏手臂和大部分枪体，但保留枪管可见
 			if gun_pivot:
-				gun_pivot.visible = false
+				for child in gun_pivot.get_children():
+					if child is Node3D and child.name in ["ArmL", "ArmR"]:
+						child.visible = false
+					elif child is MeshInstance3D and child.name == "Body":
+						child.visible = false
 		else:
 			_show_scope_overlay(false)
 			if gun_pivot:
-				gun_pivot.visible = true
+				for child in gun_pivot.get_children():
+					if child is Node3D or child is MeshInstance3D:
+						child.visible = true
 	else:
 		_show_scope_overlay(false)
 
