@@ -479,13 +479,10 @@ func _toggle_cover_debug() -> void:
 
 func _refresh_cover_debug_colors() -> void:
 	for node in _cover_debug_nodes:
-		if not is_instance_valid(node):
-			continue
-		if not node.has_meta("cover_point"):
-			continue
+		if not is_instance_valid(node): continue
+		if not node.has_meta("cover_point"): continue
 		var cp = node.get_meta("cover_point")
-		if not is_instance_valid(cp):
-			continue
+		if not is_instance_valid(cp): continue
 
 		var is_claimed: bool = false
 		var claimer_name: String = ""
@@ -495,16 +492,22 @@ func _refresh_cover_debug_colors() -> void:
 				is_claimed = true
 				claimer_name = claimer.name
 
+		# Get cover score from meta (set by enemy._evaluate_single_cover)
+		var score_text: String = ""
+		if cp.has_meta("last_score"):
+			var s: float = cp.get_meta("last_score")
+			score_text = "\n%.0f" % s
+
 		if node is MeshInstance3D:
 			var mat := node.get_surface_override_material(0) as StandardMaterial3D
 			if mat:
 				mat.albedo_color = Color(1.0, 0.2, 0.2, 0.8) if is_claimed else Color(0.2, 1.0, 0.2, 0.8)
 		elif node is Label3D:
 			if is_claimed:
-				node.text = "CLAIMED\n%s" % claimer_name
+				node.text = "CLAIMED\n%s%s" % [claimer_name, score_text]
 				node.modulate = Color(1.0, 0.3, 0.3)
 			else:
-				node.text = "FREE"
+				node.text = "FREE%s" % score_text
 				node.modulate = Color(0.3, 1.0, 0.3)
 
 func _clear_cover_debug() -> void:
@@ -520,7 +523,12 @@ func _reset_f3_toggle() -> void:
 # Process
 # ─────────────────────────────────────────────
 func _process(_delta: float) -> void:
-	# ── Refresh cover debug colors every 0.5s (don't rebuild, just recolor) ──
+	# ── Pass player health to SquadManager ──
+	var sm = get_node_or_null("/root/SquadManager")
+	if sm and max_health > 0:
+		sm.player_health_ratio = float(player_health) / float(max_health)
+
+	# ── Refresh cover debug colors every 0.5s ──
 	if _debug_ai and _cover_debug_nodes.size() > 0:
 		_cover_debug_refresh_timer -= _delta
 		if _cover_debug_refresh_timer <= 0.0:
