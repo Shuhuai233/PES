@@ -1038,9 +1038,9 @@ func _play_equip_anim() -> void:
 # ADS（瞄准镜）系统
 # ─────────────────────────────────────────────
 func _update_ads(delta: float) -> void:
-	# 奔跑 / 换弹 / 卡壳时自动退出 ADS
+	# 奔跑 / 换弹时自动退出 ADS
 	var want_aim := Input.is_action_pressed("aim") and not is_sprinting() \
-		and not is_reloading and not is_jammed and not inventory_open
+		and not is_reloading and not inventory_open
 	is_aiming = want_aim
 
 	# 平滑插值 ads_alpha (0→1)
