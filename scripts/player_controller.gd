@@ -1389,19 +1389,18 @@ func _get_muzzle_world_pos() -> Vector3:
 func _spawn_charge_ring() -> void:
 	if gun_pivot == null or camera == null:
 		return
-	# 红框由 4 条细长 BoxMesh 组成正方形边框
 	var ring := Node3D.new()
 	ring.name = "ChargeRing"
-	var ring_size: float = 0.04 + _sniper_charge * 0.02  # 初始大小随蓄力增长
+	var ring_size: float = 0.04 + _sniper_charge * 0.02
 	var thickness: float = 0.006
 	var glow_color := Color(1.0, 0.15, 0.1, 0.9)
 	var mat := PSXManager.make_psx_material(glow_color)
 	# 四条边
 	for data in [
-		[Vector3(0, ring_size, 0), Vector3(ring_size * 2, thickness, thickness)],   # 上
-		[Vector3(0, -ring_size, 0), Vector3(ring_size * 2, thickness, thickness)],  # 下
-		[Vector3(-ring_size, 0, 0), Vector3(thickness, ring_size * 2, thickness)],  # 左
-		[Vector3(ring_size, 0, 0), Vector3(thickness, ring_size * 2, thickness)],   # 右
+		[Vector3(0, ring_size, 0), Vector3(ring_size * 2, thickness, thickness)],
+		[Vector3(0, -ring_size, 0), Vector3(ring_size * 2, thickness, thickness)],
+		[Vector3(-ring_size, 0, 0), Vector3(thickness, ring_size * 2, thickness)],
+		[Vector3(ring_size, 0, 0), Vector3(thickness, ring_size * 2, thickness)],
 	]:
 		var edge := MeshInstance3D.new()
 		var em := BoxMesh.new()
@@ -1411,19 +1410,27 @@ func _spawn_charge_ring() -> void:
 		edge.set_surface_override_material(0, mat)
 		ring.add_child(edge)
 
+	# 辉光：每个方框自带一个小 OmniLight3D
+	var glow_light := OmniLight3D.new()
+	glow_light.light_color = Color(1.0, 0.2, 0.1)
+	glow_light.light_energy = 0.6 + _sniper_charge * 1.0  # 蓄力越久越亮
+	glow_light.omni_range = 0.3
+	ring.add_child(glow_light)
+
 	gun_pivot.add_child(ring)
-	# 起始位置：枪口端（Z 很负）
 	var start_z: float = -0.90
-	var end_z: float = 0.60  # 枪托后方（超出视野）
+	var end_z: float = 0.60
 	ring.position = Vector3(0, 0.01, start_z)
 	ring.scale = Vector3.ONE
 
-	# 动画：向枪托移动 + 放大 + 淡出
-	var travel_time: float = 0.5
+	# 速度随蓄力由慢到快：蓄力初期慢（0.7s），满蓄力快（0.25s）
+	var travel_time: float = lerpf(0.7, 0.25, _sniper_charge)
 	var tw := ring.create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(ring, "position:z", end_z, travel_time).set_ease(Tween.EASE_IN)
-	tw.tween_property(ring, "scale", Vector3(3.0, 3.0, 1.0), travel_time)
+	# 移动：EASE_IN 加速（开始慢末尾快）
+	tw.tween_property(ring, "position:z", end_z, travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	# 放大：EASE_IN + EXPO（开始几乎不变，末尾急剧放大）
+	tw.tween_property(ring, "scale", Vector3(3.5, 3.5, 1.0), travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_EXPO)
 	tw.set_parallel(false)
 	tw.tween_callback(ring.queue_free)
 
