@@ -861,7 +861,16 @@ func _update_debug_label() -> void:
 		return
 	var state_name: String = State.keys()[state]
 	var arch_name: String = ARCHETYPE_NAMES[archetype]
-	_debug_label.text = "%s [%s]\nHP:%d" % [state_name, arch_name, health]
+	# 武器类型根据 shoot_range 推断
+	var weapon_str: String
+	if shoot_range <= 15.0:
+		weapon_str = "SG"
+	elif shoot_range <= 40.0:
+		weapon_str = "AR"
+	else:
+		weapon_str = "DMR"
+	var hp_pct := int(float(health) / float(max_health) * 100.0)
+	_debug_label.text = "%s [%s]\nHP:%d%%  %s dmg:%d" % [state_name, arch_name, hp_pct, weapon_str, shoot_damage]
 	_debug_label.modulate = STATE_COLORS.get(state_name, Color.WHITE)
 
 func set_debug_visible(vis: bool) -> void:
@@ -869,8 +878,4 @@ func set_debug_visible(vis: bool) -> void:
 		return
 	_debug_label.visible = vis
 	if vis:
-		# Force immediate content update
-		var state_name: String = State.keys()[state]
-		var arch_name: String = ARCHETYPE_NAMES[archetype]
-		_debug_label.text = "%s [%s]\nHP:%d" % [state_name, arch_name, health]
-		_debug_label.modulate = STATE_COLORS.get(state_name, Color.WHITE)
+		_update_debug_label()

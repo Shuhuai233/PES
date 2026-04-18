@@ -184,6 +184,7 @@ func _connect_signals() -> void:
 	player.shot_fired.connect(_on_shot_fired)
 	player.stamina_changed.connect(ui.update_stamina)
 	player.weapon_changed.connect(ui.update_weapon)
+	player.enemy_hit.connect(_on_enemy_hit)
 
 	# Portal signals
 	portal.player_entered_portal.connect(_on_player_entered_portal)
@@ -444,6 +445,24 @@ func _process(_delta: float) -> void:
 
 	ui.show_reload(player.is_reloading)
 
+	# ── Debug 面板每帧更新 ────────────────────
+	var ammo_data: Dictionary = player.get_ammo_data()
+	ui.update_debug_weapon({
+		"slot":          player.current_quick_slot + 1,
+		"name":          player.equipped_weapon_name,
+		"damage":        player.damage_per_shot,
+		"fire_rate":     player.shoot_cooldown,
+		"mag_size":      player.magazine_size,
+		"ammo":          ammo_data.get("current", 0),
+		"weapon_range":  player.raycast_range,
+		"spread_current": player.current_spread,
+		"spread_base":   player.spread_base,
+		"jam_chance":    player.jam_chance,
+		"reload_time":   player.reload_time,
+		"jammed":        ammo_data.get("jammed", false),
+		"reloading":     ammo_data.get("reloading", false),
+	})
+
 # ─────────────────────────────────────────────
 # Callbacks — combat
 # ─────────────────────────────────────────────
@@ -464,6 +483,10 @@ func _on_shot_fired() -> void:
 		int(SessionManager.get_value("shots_fired", 0)) + 1)
 	if ui.current_step == ui.TutorialStep.ENTER_PORTAL:
 		ui.advance_step()
+
+func _on_enemy_hit(enemy: Node) -> void:
+	var dist: float = player.global_position.distance_to((enemy as Node3D).global_position)
+	ui.show_hit(player.damage_per_shot, dist)
 
 func _on_player_entered_portal() -> void:
 	in_stage = true
