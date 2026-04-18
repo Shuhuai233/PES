@@ -212,31 +212,183 @@ func _build_gun() -> void:
 	# 默认 fallback 枪
 	_build_procedural_gun(&"ar_medium")
 
-	# 手臂（保持程序化，与任何枪械通用）
-	var arm_l := MeshInstance3D.new()
-	arm_l.name = "ArmL"
-	var arm_mesh_l := CapsuleMesh.new()
-	arm_mesh_l.radius = 0.05
-	arm_mesh_l.height = 0.34
-	arm_l.mesh = arm_mesh_l
-	arm_l.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.75, 0.55, 0.42)))
-	arm_l.rotation_degrees = Vector3(70, 10, 10)
-	arm_l.position = Vector3(0.08, -0.28, -0.08)
-	camera.add_child(arm_l)
-
-	var arm_r := MeshInstance3D.new()
-	arm_r.name = "ArmR"
-	var arm_mesh_r := CapsuleMesh.new()
-	arm_mesh_r.radius = 0.05
-	arm_mesh_r.height = 0.34
-	arm_r.mesh = arm_mesh_r
-	arm_r.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.75, 0.55, 0.42)))
-	arm_r.rotation_degrees = Vector3(70, -10, -10)
-	arm_r.position = Vector3(0.44, -0.28, -0.08)
-	camera.add_child(arm_r)
-
 	# 创建狙击镜黑边遮罩（默认隐藏）
 	_build_scope_overlay()
+
+## 构建手臂+手掌（挂在 gun_pivot 下，跟随枪械移动）
+## left_pos: 左手在 gun_pivot 坐标系中抓握位置（护手/泵）
+## right_pos: 右手在 gun_pivot 坐标系中抓握位置（握把顶端）
+func _add_arms(left_pos: Vector3, right_pos: Vector3) -> void:
+	var skin_col := Color(0.72, 0.55, 0.42)
+	var skin_dark := Color(0.62, 0.45, 0.35)
+	var sleeve_col := Color(0.18, 0.20, 0.18)  # 暗绿色袖口
+
+	# ── 右手臂（握把手）──
+	var r_arm := Node3D.new()
+	r_arm.name = "ArmR"
+	gun_pivot.add_child(r_arm)
+	# 上臂
+	var r_upper := MeshInstance3D.new()
+	var r_up_m := CapsuleMesh.new()
+	r_up_m.radius = 0.042
+	r_up_m.height = 0.26
+	r_upper.mesh = r_up_m
+	r_upper.set_surface_override_material(0, PSXManager.make_psx_material(sleeve_col))
+	r_upper.rotation_degrees = Vector3(55, -15, -8)
+	r_upper.position = right_pos + Vector3(0.06, 0.08, 0.16)
+	r_arm.add_child(r_upper)
+	# 前臂
+	var r_fore := MeshInstance3D.new()
+	var r_fo_m := CapsuleMesh.new()
+	r_fo_m.radius = 0.038
+	r_fo_m.height = 0.22
+	r_fore.mesh = r_fo_m
+	r_fore.set_surface_override_material(0, PSXManager.make_psx_material(skin_col))
+	r_fore.rotation_degrees = Vector3(75, -10, -5)
+	r_fore.position = right_pos + Vector3(0.03, 0.02, 0.06)
+	r_arm.add_child(r_fore)
+	# 手掌（握把上的拳头）
+	var r_hand := MeshInstance3D.new()
+	var r_hm := BoxMesh.new()
+	r_hm.size = Vector3(0.06, 0.07, 0.08)
+	r_hand.mesh = r_hm
+	r_hand.set_surface_override_material(0, PSXManager.make_psx_material(skin_col))
+	r_hand.position = right_pos + Vector3(0.01, -0.02, 0.0)
+	r_hand.rotation_degrees = Vector3(-12, 0, 0)
+	r_arm.add_child(r_hand)
+	# 手指（包裹握把的弯曲指节）
+	for fi in range(4):
+		var finger := MeshInstance3D.new()
+		var fm := BoxMesh.new()
+		fm.size = Vector3(0.014, 0.035, 0.05)
+		finger.mesh = fm
+		finger.set_surface_override_material(0, PSXManager.make_psx_material(skin_dark))
+		finger.position = right_pos + Vector3(-0.025 + fi * 0.016, -0.05, -0.01)
+		finger.rotation_degrees = Vector3(-30, 0, 0)
+		r_arm.add_child(finger)
+	# 拇指
+	var r_thumb := MeshInstance3D.new()
+	var r_tm := BoxMesh.new()
+	r_tm.size = Vector3(0.04, 0.02, 0.05)
+	r_thumb.mesh = r_tm
+	r_thumb.set_surface_override_material(0, PSXManager.make_psx_material(skin_dark))
+	r_thumb.position = right_pos + Vector3(0.04, -0.02, -0.02)
+	r_thumb.rotation_degrees = Vector3(-15, 0, -20)
+	r_arm.add_child(r_thumb)
+
+	# ── 左手臂（护手/前握把手）──
+	var l_arm := Node3D.new()
+	l_arm.name = "ArmL"
+	gun_pivot.add_child(l_arm)
+	# 上臂
+	var l_upper := MeshInstance3D.new()
+	var l_up_m := CapsuleMesh.new()
+	l_up_m.radius = 0.042
+	l_up_m.height = 0.26
+	l_upper.mesh = l_up_m
+	l_upper.set_surface_override_material(0, PSXManager.make_psx_material(sleeve_col))
+	l_upper.rotation_degrees = Vector3(55, 15, 8)
+	l_upper.position = left_pos + Vector3(-0.06, 0.08, 0.16)
+	l_arm.add_child(l_upper)
+	# 前臂
+	var l_fore := MeshInstance3D.new()
+	var l_fo_m := CapsuleMesh.new()
+	l_fo_m.radius = 0.038
+	l_fo_m.height = 0.22
+	l_fore.mesh = l_fo_m
+	l_fore.set_surface_override_material(0, PSXManager.make_psx_material(skin_col))
+	l_fore.rotation_degrees = Vector3(75, 10, 5)
+	l_fore.position = left_pos + Vector3(-0.03, 0.02, 0.06)
+	l_arm.add_child(l_fore)
+	# 手掌（握护手的手）
+	var l_hand := MeshInstance3D.new()
+	var l_hm := BoxMesh.new()
+	l_hm.size = Vector3(0.06, 0.065, 0.09)
+	l_hand.mesh = l_hm
+	l_hand.set_surface_override_material(0, PSXManager.make_psx_material(skin_col))
+	l_hand.position = left_pos + Vector3(-0.01, -0.02, 0.0)
+	l_arm.add_child(l_hand)
+	# 手指（包裹护手）
+	for fi in range(4):
+		var finger := MeshInstance3D.new()
+		var fm := BoxMesh.new()
+		fm.size = Vector3(0.014, 0.035, 0.05)
+		finger.mesh = fm
+		finger.set_surface_override_material(0, PSXManager.make_psx_material(skin_dark))
+		finger.position = left_pos + Vector3(0.025 - fi * 0.016, -0.05, -0.01)
+		finger.rotation_degrees = Vector3(-25, 0, 0)
+		l_arm.add_child(finger)
+	# 拇指
+	var l_thumb := MeshInstance3D.new()
+	var l_tm := BoxMesh.new()
+	l_tm.size = Vector3(0.04, 0.02, 0.05)
+	l_thumb.mesh = l_tm
+	l_thumb.set_surface_override_material(0, PSXManager.make_psx_material(skin_dark))
+	l_thumb.position = left_pos + Vector3(-0.04, -0.02, -0.02)
+	l_thumb.rotation_degrees = Vector3(-15, 0, 20)
+	l_arm.add_child(l_thumb)
+
+## 添加机械瞄具（前准星 + 后照门），适用于无光学瞄具的武器
+## front_z: 前准星 Z 位置, rear_z: 后照门 Z 位置, top_y: 瞄具顶部 Y
+func _add_iron_sights(front_z: float, rear_z: float, top_y: float, sight_col: Color = Color(0.08, 0.08, 0.08)) -> void:
+	var mat := PSXManager.make_psx_material(sight_col)
+	var dot_mat := PSXManager.make_psx_material(Color(1.0, 0.3, 0.1))  # 前准星荧光点
+
+	# 前准星柱（细长竖条 + 顶部荧光点）
+	var fs_base := MeshInstance3D.new()
+	fs_base.name = "FrontSight"
+	var fsm := BoxMesh.new()
+	fsm.size = Vector3(0.016, 0.04, 0.012)
+	fs_base.mesh = fsm
+	fs_base.position = Vector3(0, top_y - 0.01, front_z)
+	fs_base.set_surface_override_material(0, mat)
+	gun_pivot.add_child(fs_base)
+	# 前准星护翼（两侧小翼）
+	for side in [-1.0, 1.0]:
+		var wing := MeshInstance3D.new()
+		var wm := BoxMesh.new()
+		wm.size = Vector3(0.006, 0.028, 0.016)
+		wing.mesh = wm
+		wing.position = Vector3(0.014 * side, top_y - 0.015, front_z)
+		wing.set_surface_override_material(0, mat)
+		gun_pivot.add_child(wing)
+	# 荧光点
+	var dot := MeshInstance3D.new()
+	var dm := BoxMesh.new()
+	dm.size = Vector3(0.008, 0.008, 0.008)
+	dot.mesh = dm
+	dot.position = Vector3(0, top_y + 0.012, front_z)
+	dot.set_surface_override_material(0, dot_mat)
+	gun_pivot.add_child(dot)
+
+	# 后照门（U 形缺口）
+	var rs_left := MeshInstance3D.new()
+	rs_left.name = "RearSightL"
+	var rlm := BoxMesh.new()
+	rlm.size = Vector3(0.012, 0.03, 0.016)
+	rs_left.mesh = rlm
+	rs_left.position = Vector3(-0.016, top_y - 0.008, rear_z)
+	rs_left.set_surface_override_material(0, mat)
+	gun_pivot.add_child(rs_left)
+
+	var rs_right := MeshInstance3D.new()
+	rs_right.name = "RearSightR"
+	var rrm := BoxMesh.new()
+	rrm.size = Vector3(0.012, 0.03, 0.016)
+	rs_right.mesh = rrm
+	rs_right.position = Vector3(0.016, top_y - 0.008, rear_z)
+	rs_right.set_surface_override_material(0, mat)
+	gun_pivot.add_child(rs_right)
+
+	# 后照门底座横杠
+	var rs_bar := MeshInstance3D.new()
+	rs_bar.name = "RearSightBar"
+	var rbm := BoxMesh.new()
+	rbm.size = Vector3(0.044, 0.012, 0.016)
+	rs_bar.mesh = rbm
+	rs_bar.position = Vector3(0, top_y - 0.02, rear_z)
+	rs_bar.set_surface_override_material(0, mat)
+	gun_pivot.add_child(rs_bar)
 
 ## 根据武器 ID 程序化构建不同外形的枪
 func _build_procedural_gun(weapon_id: StringName) -> void:
@@ -299,6 +451,10 @@ func _make_gun_shotgun() -> void:
 	grip.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.4)))
 	gun_pivot.add_child(grip)
 	gun_mesh = body
+	# 机瞄（散弹枪用大号珠状前准星）
+	_add_iron_sights(-0.24, 0.10, 0.13)
+	# 手臂：左手握泵，右手握把
+	_add_arms(Vector3(0, -0.06, -0.18), Vector3(0, -0.10, 0.13))
 
 ## ── BRRT Compact：方块弹匣顶部弹出的紧凑SMG ──
 func _make_gun_smg() -> void:
@@ -347,6 +503,10 @@ func _make_gun_smg() -> void:
 	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.12, 0.12, 0.12)))
 	gun_pivot.add_child(grip)
 	gun_mesh = body
+	# 机瞄
+	_add_iron_sights(-0.20, 0.08, 0.10)
+	# 手臂：左手握枪身前端，右手握把
+	_add_arms(Vector3(0, -0.04, -0.10), Vector3(0, -0.08, 0.11))
 
 ## ── M77 Overrun：Bullpup突击步枪，弹匣在后方 ──
 func _make_gun_ar() -> void:
@@ -404,6 +564,10 @@ func _make_gun_ar() -> void:
 	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.1, 0.1, 0.1)))
 	gun_pivot.add_child(grip)
 	gun_mesh = body
+	# 机瞄（AR 用翻转式机瞄，护手上方有皮卡汀尼导轨）
+	_add_iron_sights(-0.38, 0.06, 0.11)
+	# 手臂：左手握护手，右手握把
+	_add_arms(Vector3(0, -0.04, -0.28), Vector3(0, -0.08, 0.13))
 
 ## ── Repeater HPR：长枪管精确步枪，瞄准镜，Heavy弹药 ──
 func _make_gun_dmr() -> void:
@@ -463,6 +627,9 @@ func _make_gun_dmr() -> void:
 	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.1, 0.1, 0.1)))
 	gun_pivot.add_child(grip)
 	gun_mesh = body
+	# DMR 已有光学瞄准镜，只需手臂
+	# 手臂：左手握枪身前端（瞄准镜下方），右手握把
+	_add_arms(Vector3(0, -0.04, -0.20), Vector3(0, -0.06, 0.15))
 
 ## ── V99 Channel Rifle：Volt能量狙击，方形电池弹匣，蓝色发光元素 ──
 func _make_gun_sniper() -> void:
@@ -547,6 +714,9 @@ func _make_gun_sniper() -> void:
 		fin.set_surface_override_material(0, PSXManager.make_psx_material(glow.darkened(0.3)))
 		gun_pivot.add_child(fin)
 	gun_mesh = body
+	# 狙击枪已有方形 Volt 瞄准镜，只需手臂
+	# 手臂：左手握枪身前端（电池下方），右手握枪托后端
+	_add_arms(Vector3(0, -0.06, -0.20), Vector3(0, -0.06, 0.30))
 
 # ─────────────────────────────────────────────
 # 输入（鼠标视角）
@@ -992,10 +1162,6 @@ func equip_weapon(item: Resource) -> void:
 	_show_scope_overlay(false)
 	if gun_pivot:
 		gun_pivot.visible = true
-	var arm_l := camera.get_node_or_null("ArmL")
-	var arm_r := camera.get_node_or_null("ArmR")
-	if arm_l: arm_l.visible = true
-	if arm_r: arm_r.visible = true
 	# Update gun stats from item data
 	damage_per_shot = item.damage
 	shoot_cooldown = item.fire_rate
@@ -1060,19 +1226,10 @@ func _update_ads(delta: float) -> void:
 			_show_scope_overlay(true)
 			if gun_pivot:
 				gun_pivot.visible = false
-			# 隐藏手臂
-			var arm_l := camera.get_node_or_null("ArmL")
-			var arm_r := camera.get_node_or_null("ArmR")
-			if arm_l: arm_l.visible = false
-			if arm_r: arm_r.visible = false
 		else:
 			_show_scope_overlay(false)
 			if gun_pivot:
 				gun_pivot.visible = true
-			var arm_l := camera.get_node_or_null("ArmL")
-			var arm_r := camera.get_node_or_null("ArmR")
-			if arm_l: arm_l.visible = true
-			if arm_r: arm_r.visible = true
 	else:
 		_show_scope_overlay(false)
 
