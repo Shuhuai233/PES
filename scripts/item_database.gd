@@ -13,36 +13,46 @@ static func _ensure_init() -> void:
 		return
 	_initialized = true
 
-	# ── Weapons ──────────────────────────────
-	# Slot 1 — CQC (0-5m): 霰弹枪，宽扩散高伤，近距离一击必杀
-	_register(_weapon(&"shotgun_cqc", "CQC Shotgun",
-		"[CQC 0-5m] 近距离毁灭性打击。超出5m伤害急剧衰减。",
-		ItemDataRes.Rarity.RARE, 80, 0.55, 6, 2.5, 0.04, 0.12,
-		Color(0.45, 0.22, 0.08), 8.0, 1))
+	# ── Weapons (Marathon-inspired) ──────────────
+	# Slot 1 — CQC (0-5m): Misriah 2442 散弹枪
+	#   参考: Marathon WSTR Combat Shotgun / Misriah 2442
+	#   MIPS弹药，泵动式，近距离一击毙命，弹药昂贵
+	_register(_weapon(&"shotgun_cqc", "Misriah 2442",
+		"[CQC 0-5m] MIPS pump-action。近距离毁灭性打击。弹药昂贵但一发解决问题。",
+		ItemDataRes.Rarity.RARE, 85, 0.6, 5, 2.8, 0.03, 0.10,
+		Color(0.55, 0.35, 0.15), 8.0, 1))
 
-	# Slot 2 — Short (5-15m): 冲锋枪，高射速低单发伤，15m外衰减快
-	_register(_weapon(&"smg_short", "Compact SMG",
-		"[Short 5-15m] 高速连射，近距离压制利器。超出15m精度崩溃。",
-		ItemDataRes.Rarity.UNCOMMON, 14, 0.07, 30, 1.8, 0.06, 0.025,
-		Color(0.22, 0.28, 0.35), 20.0, 2))
+	# Slot 2 — Short (5-15m): BRRT Compact 冲锋枪
+	#   参考: Marathon BRRT SMG (tiny cubic clip, top intake eject)
+	#   Light弹药，极高射速，弹匣大，精度衰减快
+	_register(_weapon(&"smg_short", "BRRT Compact",
+		"[Short 5-15m] Light rounds。极高射速压制。方块弹匣顶部弹出，超出15m命中全靠缘分。",
+		ItemDataRes.Rarity.UNCOMMON, 12, 0.065, 35, 1.6, 0.05, 0.03,
+		Color(0.25, 0.45, 0.55), 20.0, 2))
 
-	# Slot 3 — Medium (15-40m): 突击步枪，各项均衡
-	_register(_weapon(&"ar_medium", "Assault Rifle",
-		"[Medium 15-40m] 标准突击步枪。全能均衡，无明显短板。",
-		ItemDataRes.Rarity.COMMON, 28, 0.13, 25, 2.0, 0.08, 0.005,
-		Color(0.18, 0.22, 0.18), 50.0, 3))
+	# Slot 3 — Medium (15-40m): M77 Overrun 突击步枪
+	#   参考: Marathon M77 Assault / Overrun AR (bullpup, CMYK toylike)
+	#   Light弹药，bullpup构型，均衡全能
+	_register(_weapon(&"ar_medium", "M77 Overrun",
+		"[Medium 15-40m] Light rounds。Bullpup全能突击步枪。稳定可靠，无明显短板。",
+		ItemDataRes.Rarity.COMMON, 26, 0.12, 28, 2.0, 0.07, 0.006,
+		Color(0.22, 0.35, 0.28), 50.0, 3))
 
-	# Slot 4 — Long (40-100m): DMR半自动精确步枪，高单发伤低射速
-	_register(_weapon(&"dmr_long", "Marksman Rifle",
-		"[Long 40-100m] 半自动精确步枪。沉稳击发，远距离点名。",
-		ItemDataRes.Rarity.UNCOMMON, 65, 0.55, 10, 2.2, 0.05, 0.002,
-		Color(0.28, 0.24, 0.16), 100.0, 4))
+	# Slot 4 — Long (40-100m): Repeater HPR 精确步枪
+	#   参考: Marathon Repeater HPR (连续命中加速射击，高爆头倍率)
+	#   Heavy弹药，半自动，稳定射击奖励精准
+	_register(_weapon(&"dmr_long", "Repeater HPR",
+		"[Long 40-100m] Heavy rounds。半自动精确步枪。连续命中时射击节奏加快，奖励精准。",
+		ItemDataRes.Rarity.UNCOMMON, 58, 0.5, 12, 2.2, 0.04, 0.002,
+		Color(0.35, 0.28, 0.18), 100.0, 4))
 
-	# Slot 5 — Discouraged (100m+): 狙击枪，极高伤极慢射速，需保持静止
-	_register(_weapon(&"sniper_disc", "Anti-Materiel Sniper",
-		"[Discouraged 100m+] 反器材狙击枪。一发入魂，换弹极慢。移动中精度归零。",
-		ItemDataRes.Rarity.RARE, 150, 1.5, 5, 3.5, 0.02, 0.001,
-		Color(0.12, 0.12, 0.16), 150.0, 5))
+	# Slot 5 — Discouraged (100m+): V99 Channel Rifle Volt狙击
+	#   参考: Marathon V99 Channel Rifle (Volt电池弹药, 能量武器)
+	#   Volt弹药，充能射击，击穿护盾，极高单发伤害
+	_register(_weapon(&"sniper_disc", "V99 Channel Rifle",
+		"[Discouraged 100m+] Volt cell。充能狙击步枪。一发入魂，击穿任何护盾。提前换弹丢失剩余能量。",
+		ItemDataRes.Rarity.RARE, 140, 1.4, 4, 3.2, 0.02, 0.001,
+		Color(0.15, 0.3, 0.55), 150.0, 5))
 
 	# ── Legacy / Inventory Weapons ────────────
 	_register(_weapon(&"pistol_default", "Service Pistol",

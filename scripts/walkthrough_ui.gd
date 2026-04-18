@@ -174,8 +174,8 @@ func _build_hud() -> void:
 	stamina_bar_bg.add_child(stamina_bar_fill)
 
 	# ── Minecraft 风格底部快速物品栏 ──────────
-	var slot_names := ["SG", "SMG", "AR", "DMR", "SNP"]
-	var slot_full_names := ["Shotgun", "Compact SMG", "Assault Rifle", "Marksman", "Sniper"]
+	var slot_names := ["SG", "SMG", "AR", "HPR", "V99"]
+	var slot_full_names := ["Misriah 2442", "BRRT Compact", "M77 Overrun", "Repeater HPR", "V99 Channel"]
 	var slot_colors := [
 		Color(0.9, 0.45, 0.1),
 		Color(0.25, 0.75, 0.95),
@@ -626,7 +626,7 @@ func update_debug_weapon(info: Dictionary) -> void:
 		return
 	# 更新 icon
 	var slot: int = info.get("slot", 0)
-	var icon_texts := ["[SG]", "[SMG]", "[AR]", "[DMR]", "[SNP]"]
+	var icon_texts := ["[SG]", "[SMG]", "[AR]", "[HPR]", "[V99]"]
 	var icon_colors := [
 		Color(0.9, 0.45, 0.1),
 		Color(0.25, 0.75, 0.95),
