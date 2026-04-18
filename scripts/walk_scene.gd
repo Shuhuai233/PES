@@ -13,7 +13,7 @@ const ItemDataRes := preload("res://scripts/item_data.gd")
 
 var loot_spawner_node: Node3D = null
 var inventory_ui_node: CanvasLayer = null
-var cover_spawner_node: Node3D = null
+var cover_spawner_node: Node3D = null  ## now arena_layout
 var nav_region: NavigationRegion3D = null
 
 var player_health: int = 500
@@ -81,12 +81,12 @@ func _setup_cover() -> void:
 	nav_region.name = "NavigationRegion3D"
 	add_child(nav_region)
 
+	# Use fixed arena layout instead of procedural cover
 	cover_spawner_node = Node3D.new()
-	cover_spawner_node.name = "CoverSpawner"
-	cover_spawner_node.set_script(load("res://scripts/cover_spawner.gd"))
+	cover_spawner_node.name = "ArenaLayout"
+	cover_spawner_node.set_script(load("res://scripts/arena_layout.gd"))
 	add_child(cover_spawner_node)
-	# Defer cover spawn so all nodes are in the tree first, then bake NavMesh
-	cover_spawner_node.call_deferred("spawn_cover")
+	cover_spawner_node.call_deferred("build_layout")
 	call_deferred("_bake_navmesh")
 
 func _bake_navmesh() -> void:
