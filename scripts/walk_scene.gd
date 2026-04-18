@@ -140,8 +140,6 @@ func _connect_signals() -> void:
 	player.enemy_hit.connect(_on_enemy_hit)
 	if player.has_signal("headshot_hit"):
 		player.headshot_hit.connect(_on_headshot)
-	if player.has_signal("weapon_jammed"):
-		player.weapon_jammed.connect(_on_weapon_jammed)
 
 	# Portal signals
 	portal.player_entered_portal.connect(_on_player_entered_portal)
@@ -659,14 +657,6 @@ func _on_walkthrough_complete() -> void:
 func _on_headshot(_enemy: Node) -> void:
 	if ui and ui.has_method("show_headshot_marker"):
 		ui.show_headshot_marker()
-
-func _on_weapon_jammed() -> void:
-	var jw: Label = ui.get_node_or_null("JamWarning") as Label
-	if jw:
-		jw.visible = true
-		var tw := create_tween()
-		tw.tween_interval(0.5)
-		tw.tween_callback(func(): if is_instance_valid(jw): jw.visible = false)
 
 # ─────────────────────────────────────────────
 # Callbacks — loot & inventory

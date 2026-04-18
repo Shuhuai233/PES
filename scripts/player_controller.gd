@@ -79,7 +79,6 @@ const QUICK_SLOT_IDS: Array[StringName] = [
 @export var recoil_kick_pos: float = 0.04        ## 枪械模型向后位移量（纯视觉）
 @export var recoil_kick_rot: float = 5.0         ## 枪械模型旋转踢角度（纯视觉，度）
 @export var recoil_apply_speed: float = 18.0     ## 后坐力施加到镜头的速度
-@export var jam_kick_rot: float = 8.0            ## 卡壳时枪械旋转角度（度）
 
 @export_group("Spread / Accuracy")
 @export var spread_base: float = 0.0           ## 静止精度偏移（单位：米，以30m处为基准）
@@ -124,8 +123,7 @@ var shoot_timer: float = 0.0
 var current_ammo: int = 0
 var is_reloading: bool = false
 var reload_timer: float = 0.0
-var is_jammed: bool = false         # 卡壳状态
-var jam_chance: float = 0.0         # 当前武器卡壳概率
+var _cant_shoot_safety: float = 0.0  # can_shoot=false 安全计时器
 
 # DMR 连续命中加速
 var _dmr_streak: int = 0            # 连续命中计数
@@ -137,8 +135,10 @@ const DMR_SPEED_PER_STACK := 0.06   # 每层减少射击间隔（秒）
 # Sniper 蓄力
 var _sniper_charging: bool = false
 var _sniper_charge: float = 0.0     # 0→1
+var _sniper_ring_timer: float = 0.0 # 红框生成间隔计时
 const SNIPER_CHARGE_TIME := 0.8     # 蓄力时间（秒）
 const SNIPER_MIN_CHARGE := 0.3      # 最低可射击蓄力比例
+const SNIPER_RING_INTERVAL := 0.1   # 每 0.1 秒生成一个红框
 
 # 快速切换武器槽（1-5），-1 表示未选中
 var current_quick_slot: int = -1
@@ -195,7 +195,6 @@ signal ammo_changed(current: int, max_ammo: int)
 signal shot_fired()
 signal enemy_hit(node: Node)
 signal headshot_hit(node: Node)
-signal weapon_jammed()
 signal stamina_changed(current: float, max_val: float)
 signal weapon_changed(weapon_name: String, slot: int)
 
@@ -834,6 +833,14 @@ func _tick_shoot_timer(delta: float) -> void:
 		shoot_timer -= delta
 		if shoot_timer <= 0.0:
 			can_shoot = true
+	# 安全阀：can_shoot 卡 false 超过 3 秒强制恢复
+	if not can_shoot and not is_reloading:
+		_cant_shoot_safety += delta
+		if _cant_shoot_safety > 3.0:
+			can_shoot = true
+			_cant_shoot_safety = 0.0
+	else:
+		_cant_shoot_safety = 0.0
 
 func _tick_reload(delta: float) -> void:
 	if is_reloading:
@@ -842,12 +849,6 @@ func _tick_reload(delta: float) -> void:
 			_finish_reload()
 
 func _handle_action_input() -> void:
-	# 卡壳清除（按R）
-	if is_jammed:
-		if Input.is_action_just_pressed("reload"):
-			is_jammed = false
-			_start_reload()
-		return  # 卡壳时不能做别的
 	if Input.is_action_just_pressed("reload") and not is_reloading:
 		_start_reload()
 	# 奔跑时若禁止开枪则跳过
@@ -859,12 +860,19 @@ func _handle_action_input() -> void:
 			if not _sniper_charging:
 				_sniper_charging = true
 				_sniper_charge = 0.0
+				_sniper_ring_timer = 0.0
 		if _sniper_charging:
-			_sniper_charge = minf(_sniper_charge + get_process_delta_time() / SNIPER_CHARGE_TIME, 1.0)
+			var dt := get_process_delta_time()
+			_sniper_charge = minf(_sniper_charge + dt / SNIPER_CHARGE_TIME, 1.0)
+			# 生成蓄力红框动画
+			_sniper_ring_timer += dt
+			if _sniper_ring_timer >= SNIPER_RING_INTERVAL:
+				_sniper_ring_timer -= SNIPER_RING_INTERVAL
+				_spawn_charge_ring()
 			if Input.is_action_just_released("shoot"):
 				_sniper_charging = false
 				if _sniper_charge >= SNIPER_MIN_CHARGE:
-					_try_shoot()  # 伤害会乘以 _sniper_charge
+					_try_shoot()
 				_sniper_charge = 0.0
 	else:
 		_sniper_charging = false
@@ -1147,19 +1155,6 @@ func _try_shoot() -> void:
 		_start_reload()
 		return
 
-	# ── 卡壳检测 ──
-	if jam_chance > 0.0 and randf() < jam_chance:
-		is_jammed = true
-		can_shoot = false
-		weapon_jammed.emit()
-		# 卡壳视觉：枪模抖动
-		if gun_pivot:
-			if _gun_tween and _gun_tween.is_running(): _gun_tween.kill()
-			_gun_tween = create_tween()
-			_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(-jam_kick_rot, 0, 3), 0.05)
-			_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.15)
-		return
-
 	current_ammo -= 1
 	can_shoot = false
 
@@ -1389,6 +1384,48 @@ func _get_muzzle_world_pos() -> Vector3:
 	if camera == null:
 		return global_position
 	return camera.global_position + camera.global_basis * _get_muzzle_local_pos()
+
+## Sniper 蓄力红框动画：发光红色方框从枪口向枪托移动并放大
+func _spawn_charge_ring() -> void:
+	if gun_pivot == null or camera == null:
+		return
+	# 红框由 4 条细长 BoxMesh 组成正方形边框
+	var ring := Node3D.new()
+	ring.name = "ChargeRing"
+	var ring_size: float = 0.04 + _sniper_charge * 0.02  # 初始大小随蓄力增长
+	var thickness: float = 0.006
+	var glow_color := Color(1.0, 0.15, 0.1, 0.9)
+	var mat := PSXManager.make_psx_material(glow_color)
+	# 四条边
+	for data in [
+		[Vector3(0, ring_size, 0), Vector3(ring_size * 2, thickness, thickness)],   # 上
+		[Vector3(0, -ring_size, 0), Vector3(ring_size * 2, thickness, thickness)],  # 下
+		[Vector3(-ring_size, 0, 0), Vector3(thickness, ring_size * 2, thickness)],  # 左
+		[Vector3(ring_size, 0, 0), Vector3(thickness, ring_size * 2, thickness)],   # 右
+	]:
+		var edge := MeshInstance3D.new()
+		var em := BoxMesh.new()
+		em.size = data[1]
+		edge.mesh = em
+		edge.position = data[0]
+		edge.set_surface_override_material(0, mat)
+		ring.add_child(edge)
+
+	gun_pivot.add_child(ring)
+	# 起始位置：枪口端（Z 很负）
+	var start_z: float = -0.90
+	var end_z: float = 0.60  # 枪托后方（超出视野）
+	ring.position = Vector3(0, 0.01, start_z)
+	ring.scale = Vector3.ONE
+
+	# 动画：向枪托移动 + 放大 + 淡出
+	var travel_time: float = 0.5
+	var tw := ring.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(ring, "position:z", end_z, travel_time).set_ease(Tween.EASE_IN)
+	tw.tween_property(ring, "scale", Vector3(3.0, 3.0, 1.0), travel_time)
+	tw.set_parallel(false)
+	tw.tween_callback(ring.queue_free)
 
 ## 枪口火焰可见效果
 func _spawn_muzzle_flash_fx() -> void:
@@ -1623,12 +1660,10 @@ func equip_weapon(item: Resource) -> void:
 	magazine_size = item.weapon_magazine
 	reload_time = item.weapon_reload_time
 	spread_base = item.weapon_spread
-	jam_chance = item.weapon_jam_chance if "weapon_jam_chance" in item else 0.0
 	raycast_range = item.weapon_range if "weapon_range" in item else 30.0
 	# Refill ammo + reset states
 	current_ammo = magazine_size
 	is_reloading = false
-	is_jammed = false
 	can_shoot = true
 	_dmr_streak = 0
 	_sniper_charging = false
