@@ -1119,6 +1119,7 @@ func _try_shoot() -> void:
 	var hit_point: Vector3
 	if raycast and raycast.is_colliding():
 		hit_point = raycast.get_collision_point()
+		var hit_normal := raycast.get_collision_normal()
 		var collider := raycast.get_collider()
 		if collider and collider.is_in_group("enemies"):
 			# 判定爆头：命中点 Y > 敌人脚底 + 1.0（头部区域）
@@ -1127,7 +1128,11 @@ func _try_shoot() -> void:
 			enemy_hit.emit(collider)
 			if collider.has_method("take_damage"):
 				collider.take_damage(final_damage)
-			_spawn_hit_particles(hit_point, raycast.get_collision_normal())
+			_spawn_hit_particles(hit_point, hit_normal)
+		else:
+			# 命中墙壁/地面/掩体等非敌人物体 → 弹孔 + 碎屑
+			_spawn_bullet_hole(hit_point, hit_normal)
+			_spawn_impact_debris(hit_point, hit_normal)
 	else:
 		hit_point = camera.global_position + camera.global_basis * raycast.target_position
 
@@ -1250,6 +1255,79 @@ func _spawn_hit_particles(hit_pos: Vector3, hit_normal: Vector3) -> void:
 		tw.tween_property(particle, "global_position", end_pos, randf_range(0.15, 0.3))
 		tw.parallel().tween_property(particle, "scale", Vector3.ZERO, 0.3)
 		tw.tween_callback(particle.queue_free)
+
+# ─────────────────────────────────────────────
+# 弹孔（墙壁/地面命中标记）
+# ─────────────────────────────────────────────
+func _spawn_bullet_hole(hit_pos: Vector3, hit_normal: Vector3) -> void:
+	var hole := MeshInstance3D.new()
+	hole.name = "BulletHole"
+	# 用扁平圆柱模拟弹孔贴花
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.025
+	cm.bottom_radius = 0.03
+	cm.height = 0.004
+	hole.mesh = cm
+	hole.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.02, 0.02, 0.02)))
+	get_tree().current_scene.add_child(hole)
+
+	# 偏移一点避免 z-fighting
+	hole.global_position = hit_pos + hit_normal * 0.002
+
+	# 旋转让圆柱面朝法线方向（贴合表面）
+	if hit_normal.abs() != Vector3.UP:
+		hole.look_at(hit_pos + hit_normal, Vector3.UP)
+		hole.rotate_object_local(Vector3.RIGHT, deg_to_rad(90))
+	else:
+		# 水平面（地板/天花板）
+		hole.rotation_degrees.x = 0 if hit_normal.y > 0 else 180
+
+	# 周围灼烧痕（略大的浅色环）
+	var scorch := MeshInstance3D.new()
+	var sm := CylinderMesh.new()
+	sm.top_radius = 0.045
+	sm.bottom_radius = 0.05
+	sm.height = 0.002
+	scorch.mesh = sm
+	scorch.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.06, 0.05, 0.04)))
+	hole.add_child(scorch)  # 跟随弹孔
+
+	# 15 秒后淡出消失
+	var tw := hole.create_tween()
+	tw.tween_interval(15.0)
+	tw.tween_property(hole, "scale", Vector3.ZERO, 0.5)
+	tw.tween_callback(hole.queue_free)
+
+## 墙面碎屑（命中时飞出的小碎块）
+func _spawn_impact_debris(hit_pos: Vector3, hit_normal: Vector3) -> void:
+	var count := randi_range(3, 6)
+	for i in count:
+		var chip := MeshInstance3D.new()
+		var pm := BoxMesh.new()
+		var s := randf_range(0.008, 0.02)
+		pm.size = Vector3(s, s, s)
+		chip.mesh = pm
+		# 随机灰色/棕色碎屑
+		var shade := randf_range(0.3, 0.6)
+		chip.set_surface_override_material(0, PSXManager.make_psx_material(
+			Color(shade, shade * 0.9, shade * 0.8)))
+		get_tree().current_scene.add_child(chip)
+		chip.global_position = hit_pos
+		# 沿法线 + 随机散射方向弹出
+		var scatter := (hit_normal + Vector3(
+			randf_range(-0.6, 0.6),
+			randf_range(-0.3, 0.6),
+			randf_range(-0.6, 0.6)
+		)).normalized()
+		var end_pos := hit_pos + scatter * randf_range(0.1, 0.35)
+		var tw := chip.create_tween()
+		tw.tween_property(chip, "global_position", end_pos, randf_range(0.12, 0.25))
+		tw.parallel().tween_property(chip, "rotation_degrees",
+			Vector3(randf() * 360, randf() * 360, randf() * 360), 0.25)
+		tw.tween_property(chip, "global_position:y",
+			chip.global_position.y - 0.3, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_property(chip, "scale", Vector3.ZERO, 0.15)
+		tw.tween_callback(chip.queue_free)
 
 # ─────────────────────────────────────────────
 # 弹道 tracer（可见弹丸轨迹）
