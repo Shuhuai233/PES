@@ -58,6 +58,8 @@ var _melee_cooldown: float = 0.0
 var _advance_shoot_timer: float = 0.0
 var _no_cover_timer: float = 0.0       ## how long since we failed to find cover
 
+var _debug_label: Label3D = null       ## 头顶 debug 标签
+
 @onready var mesh: MeshInstance3D = $MeshInstance3D
 
 signal died(enemy: Node)
@@ -72,6 +74,7 @@ func _ready() -> void:
 	health = max_health
 	_player = get_tree().get_first_node_in_group("player")
 	state = State.SEEK_COVER
+	_build_debug_label()
 
 func _physics_process(delta: float) -> void:
 	if is_dead:
@@ -106,6 +109,7 @@ func _physics_process(delta: float) -> void:
 			_state_retreat(delta)
 
 	move_and_slide()
+	_update_debug_label()
 
 # ═════════════════════════════════════════════
 # SEEK_COVER — find and run to the best cover
@@ -497,3 +501,43 @@ func _look_at_player() -> void:
 	var look_target := Vector3(_player.global_position.x, global_position.y, _player.global_position.z)
 	if global_position.distance_squared_to(look_target) > 0.001:
 		look_at(look_target, Vector3.UP)
+
+# ─────────────────────────────────────────────
+# Debug label（头顶 HP / 状态 / 武器）
+# ─────────────────────────────────────────────
+func _build_debug_label() -> void:
+	_debug_label = Label3D.new()
+	_debug_label.name = "DebugLabel"
+	_debug_label.position = Vector3(0, 1.6, 0)  # 头顶上方
+	_debug_label.font_size = 32
+	_debug_label.modulate = Color(1, 1, 0.2, 0.92)
+	_debug_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_debug_label.no_depth_test = true
+	_debug_label.double_sided = true
+	_debug_label.text = "..."
+	add_child(_debug_label)
+
+func _update_debug_label() -> void:
+	if _debug_label == null:
+		return
+	var state_str: String
+	match state:
+		State.SEEK_COVER:  state_str = "SEEK"
+		State.IN_COVER:    state_str = "COVER"
+		State.PEEK_SHOOT:  state_str = "PEEK"
+		State.ADVANCE:     state_str = "RUSH"
+		State.RETREAT:     state_str = "RETRX"
+		_:                 state_str = "?"
+	# 武器类型根据 shoot_range 推断
+	var weapon_str: String
+	if shoot_range <= 15.0:
+		weapon_str = "SG"   # 霰弹/SMG — CQC/Short
+	elif shoot_range <= 40.0:
+		weapon_str = "AR"   # 突击步枪 — Medium
+	else:
+		weapon_str = "DMR"  # 精确步枪 — Long
+	var hp_pct := int(float(health) / float(max_health) * 100.0)
+	_debug_label.text = "%s  %d%%\n%s  dmg:%d" % [state_str, hp_pct, weapon_str, shoot_damage]
+	# 血量越低颜色越红
+	var t := float(health) / float(max_health)
+	_debug_label.modulate = Color(1.0, t, t * 0.2, 0.9)

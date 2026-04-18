@@ -76,6 +76,12 @@ var fade_panel: ColorRect
 var weapon_name_label: Label   ## 当前装备武器名
 var slot_bar_labels: Array[Label] = []  ## 武器槽 1-5 指示器
 
+# ── Debug ──
+var _debug_panel: ColorRect
+var _debug_label: Label
+var _hit_label: Label          ## 命中信息（屏幕中央）
+var _hit_fade_timer: float = 0.0
+
 # ─────────────────────────────────────────────
 # 状态
 # ─────────────────────────────────────────────
@@ -98,6 +104,14 @@ func _process(delta: float) -> void:
 		_step_blink_timer += delta
 		var alpha: float = 0.5 + 0.5 * sin(_step_blink_timer * 3.0)
 		step_indicator.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0, alpha))
+	# 命中标签淡出
+	if _hit_fade_timer > 0.0:
+		_hit_fade_timer -= delta
+		var a: float = clamp(_hit_fade_timer / 0.6, 0.0, 1.0)
+		if _hit_label:
+			_hit_label.modulate.a = a
+		if _hit_fade_timer <= 0.0 and _hit_label:
+			_hit_label.visible = false
 
 # ─────────────────────────────────────────────
 # HUD 构建
@@ -191,6 +205,43 @@ func _build_hud() -> void:
 	weapon_name_label.add_theme_color_override("font_color", Color(0.95, 0.95, 0.95, 0.7))
 	weapon_name_label.text = ""
 	add_child(weapon_name_label)
+
+	# ── Debug 面板（左上角常驻）────────────────
+	_debug_panel = ColorRect.new()
+	_debug_panel.color = Color(0, 0, 0, 0.72)
+	_debug_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_debug_panel.offset_left = 10
+	_debug_panel.offset_top = 10
+	_debug_panel.offset_right = 300
+	_debug_panel.offset_bottom = 220
+	_debug_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_debug_panel)
+
+	_debug_label = Label.new()
+	_debug_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_debug_label.offset_left = 8
+	_debug_label.offset_top = 6
+	_debug_label.offset_right = -8
+	_debug_label.offset_bottom = -6
+	_debug_label.add_theme_font_size_override("font_size", 12)
+	_debug_label.add_theme_color_override("font_color", Color(0.85, 1.0, 0.85))
+	_debug_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_debug_label.text = "[ DEBUG ]"
+	_debug_panel.add_child(_debug_label)
+
+	# ── 命中信息（屏幕中央偏上）───────────────
+	_hit_label = Label.new()
+	_hit_label.set_anchors_preset(Control.PRESET_CENTER)
+	_hit_label.offset_left = -140
+	_hit_label.offset_right = 140
+	_hit_label.offset_top = -80
+	_hit_label.offset_bottom = -50
+	_hit_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hit_label.add_theme_font_size_override("font_size", 22)
+	_hit_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
+	_hit_label.modulate.a = 0.0
+	_hit_label.visible = false
+	add_child(_hit_label)
 
 	# 弹药
 	ammo_label = Label.new()
@@ -461,6 +512,35 @@ func update_weapon(weapon_name: String, slot: int) -> void:
 		else:
 			lbl.add_theme_color_override("font_color", slot_colors[i].darkened(0.5))
 			lbl.add_theme_font_size_override("font_size", 13)
+
+## 更新左上角武器 debug 面板
+func update_debug_weapon(info: Dictionary) -> void:
+	if not _debug_label:
+		return
+	var slot_tag := "[%d] %s" % [info.get("slot", 0), info.get("name", "?")]
+	var dmg     := "DMG      %d" % info.get("damage", 0)
+	var rate    := "FIRE RT  %.2f s  (%.0f rpm)" % [info.get("fire_rate", 0), 60.0 / maxf(info.get("fire_rate", 1.0), 0.001)]
+	var mag     := "MAG      %d / %d" % [info.get("ammo", 0), info.get("mag_size", 0)]
+	var rng     := "RANGE    %.0f m" % info.get("weapon_range", 30)
+	var spread  := "SPREAD   %.4f  (base %.4f)" % [info.get("spread_current", 0.0), info.get("spread_base", 0.0)]
+	var jam     := "JAM      %.0f%%" % (info.get("jam_chance", 0.0) * 100.0)
+	var reload  := "RELOAD   %.1f s" % info.get("reload_time", 0.0)
+	var state   := "STATE    %s%s" % [
+		"JAMMED  " if info.get("jammed", false) else "",
+		"RELOAD" if info.get("reloading", false) else ("OK" if not info.get("jammed", false) else ""),
+	]
+	_debug_label.text = "%s\n─────────────────\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s" % [
+		slot_tag, dmg, rate, mag, rng, spread, jam, reload, state
+	]
+
+## 命中时弹出伤害数字
+func show_hit(damage: int, distance: float) -> void:
+	if not _hit_label:
+		return
+	_hit_label.text = "HIT  -%d  (%.1fm)" % [damage, distance]
+	_hit_label.visible = true
+	_hit_label.modulate.a = 1.0
+	_hit_fade_timer = 1.0  # 1秒后淡出
 
 # ─────────────────────────────────────────────
 # 教程触发通知（由 walk_scene.gd 调用）
