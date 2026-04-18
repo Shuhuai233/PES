@@ -255,7 +255,7 @@ static func spawn_tracer(muzzle_pos: Vector3, hit_point: Vector3, scene_root: No
 
 ## 弹道火光残留（沿路径生成逐渐消失的橙色光点）
 static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_root: Node) -> void:
-	var trail_count: int = clampi(int(dist / 2.0), 3, 10)
+	var trail_count: int = clampi(int(dist * 5.0), 30, 100)
 	var direction := (end - start).normalized()
 	for i in trail_count:
 		var t: float = float(i + 1) / float(trail_count + 1)
