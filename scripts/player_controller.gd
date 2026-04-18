@@ -703,7 +703,7 @@ func _fire_single_ray(dmg: int, spread: float) -> void:
 		if _current_weapon_id == &"dmr_long":
 			_dmr_streak = 0
 
-	VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene)
+	VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger())
 
 ## 散弹枪 — 8 发弹丸扇形散射
 func _fire_shotgun_pellets() -> void:
@@ -741,7 +741,7 @@ func _fire_shotgun_pellets() -> void:
 		else:
 			hit_point = camera.global_position + camera.global_basis * raycast.target_position
 		if i == 0:
-			VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene)
+	VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger())
 
 # ─────────────────────────────────────────────
 # 枪械动画
@@ -835,6 +835,16 @@ func _flash_muzzle() -> void:
 			muzzle_flash.visible = false
 	# 枪口火焰粒子（可见的闪光）
 	VFX.spawn_muzzle_flash_fx(_get_muzzle_world_pos(), camera.global_basis, get_tree().current_scene)
+
+## 根据武器类型返回弹道火光残留时间
+func _get_trail_linger() -> float:
+	match _current_weapon_id:
+		&"shotgun_cqc": return 0.2    # 散弹短距离，残留短
+		&"smg_short": return 0.15     # SMG 射速快，残留很短避免堆积
+		&"ar_medium": return 0.3      # AR 中等
+		&"dmr_long": return 0.6       # DMR 单发，残留较长
+		&"sniper_disc": return 1.5    # 狙击枪，长残留突出"能量射线"感
+	return 0.3
 
 ## 获取枪口在 camera 本地空间的位置
 func _get_muzzle_local_pos() -> Vector3:

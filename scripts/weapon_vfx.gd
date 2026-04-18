@@ -230,7 +230,7 @@ static func spawn_impact_debris(hit_pos: Vector3, hit_normal: Vector3, scene_roo
 # ─────────────────────────────────────────────
 # Tracer
 # ─────────────────────────────────────────────
-static func spawn_tracer(muzzle_pos: Vector3, hit_point: Vector3, scene_root: Node) -> void:
+static func spawn_tracer(muzzle_pos: Vector3, hit_point: Vector3, scene_root: Node, linger: float = 0.3) -> void:
 	var dir := (hit_point - muzzle_pos)
 	var dist := dir.length()
 	if dist < 0.5:
@@ -247,14 +247,14 @@ static func spawn_tracer(muzzle_pos: Vector3, hit_point: Vector3, scene_root: No
 	var fly_time: float = clampf(dist / 150.0, 0.02, 0.12)
 	var tw := tracer.create_tween()
 	tw.tween_property(tracer, "global_position", hit_point, fly_time)
-	tw.tween_interval(0.3)
+	tw.tween_interval(linger)
 	tw.tween_property(tracer, "scale", Vector3.ZERO, 0.15)
 	tw.tween_callback(_return_to_pool.bind("tracer", tracer))
 	# ── 火光残留：沿弹道路径生成发光粒子 ──
-	_spawn_fire_trail(muzzle_pos, hit_point, dist, scene_root)
+	_spawn_fire_trail(muzzle_pos, hit_point, dist, scene_root, linger)
 
 ## 弹道火光残留（沿路径生成逐渐消失的橙色光点）
-static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_root: Node) -> void:
+static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_root: Node, linger: float = 0.3) -> void:
 	var trail_count: int = clampi(int(dist * 5.0), 30, 100)
 	var direction := (end - start).normalized()
 	for i in trail_count:
@@ -270,11 +270,12 @@ static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_r
 		scene_root.add_child(particle)
 		particle.global_position = pos + Vector3(
 			randf_range(-0.02, 0.02), randf_range(-0.02, 0.02), randf_range(-0.02, 0.02))
-		# 每个火光粒子停留后渐小消失
-		var delay: float = t * 0.05  # 前面的先出现
+		# 停留时间基于武器 linger 参数
+		var delay: float = t * 0.05
+		var stay: float = randf_range(linger * 0.7, linger * 1.3)
 		var ptw := particle.create_tween()
 		ptw.tween_interval(delay)
-		ptw.tween_interval(randf_range(0.2, 0.5))  # 停留
+		ptw.tween_interval(stay)
 		ptw.tween_property(particle, "scale", Vector3.ZERO, randf_range(0.15, 0.3))
 		ptw.tween_callback(particle.queue_free)
 
