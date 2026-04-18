@@ -201,9 +201,9 @@ func _ready() -> void:
 # 枪械构建（Marathon 风格大枪 + ADS 支持）
 # ─────────────────────────────────────────────
 # Hip-fire 位置（枪在画面右下角，占屏幕 ~30-35%）
-const GUN_HIP_POS := Vector3(0.32, -0.28, -0.50)
-# ADS 位置（枪居中，瞄具对齐屏幕中心准星）
-const GUN_ADS_POS := Vector3(0.0, -0.10, -0.42)
+const GUN_HIP_POS := Vector3(0.32, -0.32, -0.50)
+# ADS 位置（枪居中偏下，瞄具顶端对齐准星）
+const GUN_ADS_POS := Vector3(0.0, -0.14, -0.42)
 
 func _build_gun() -> void:
 	gun_pivot = Node3D.new()
@@ -219,7 +219,7 @@ func _build_gun() -> void:
 	_build_scope_overlay()
 
 ## 构建手臂（挂在 gun_pivot 下，跟随枪械移动）
-## 简洁风格：袖口上臂 + 肤色前臂 + 手套拳头（一体成型，不做单独手指）
+## 只显示前臂+手套拳头（上臂藏在画面下方外，FPS 标准做法）
 func _add_arms(left_pos: Vector3, right_pos: Vector3) -> void:
 	var skin_col := Color(0.72, 0.55, 0.42)
 	var glove_col := Color(0.15, 0.15, 0.14)    # 黑色战术手套
@@ -229,30 +229,20 @@ func _add_arms(left_pos: Vector3, right_pos: Vector3) -> void:
 	var r_arm := Node3D.new()
 	r_arm.name = "ArmR"
 	gun_pivot.add_child(r_arm)
-	# 上臂（袖口）
-	var r_upper := MeshInstance3D.new()
-	var r_up_m := CapsuleMesh.new()
-	r_up_m.radius = 0.045
-	r_up_m.height = 0.28
-	r_upper.mesh = r_up_m
-	r_upper.set_surface_override_material(0, PSXManager.make_psx_material(sleeve_col))
-	r_upper.rotation_degrees = Vector3(60, -12, -5)
-	r_upper.position = right_pos + Vector3(0.05, 0.10, 0.18)
-	r_arm.add_child(r_upper)
-	# 前臂（肤色）
+	# 前臂（从画面右下角伸入，只露出一截）
 	var r_fore := MeshInstance3D.new()
 	var r_fo_m := CapsuleMesh.new()
-	r_fo_m.radius = 0.04
-	r_fo_m.height = 0.20
+	r_fo_m.radius = 0.038
+	r_fo_m.height = 0.24
 	r_fore.mesh = r_fo_m
-	r_fore.set_surface_override_material(0, PSXManager.make_psx_material(skin_col))
-	r_fore.rotation_degrees = Vector3(70, -8, 0)
-	r_fore.position = right_pos + Vector3(0.03, 0.03, 0.08)
+	r_fore.set_surface_override_material(0, PSXManager.make_psx_material(sleeve_col))
+	r_fore.rotation_degrees = Vector3(65, -10, -5)
+	r_fore.position = right_pos + Vector3(0.04, 0.06, 0.12)
 	r_arm.add_child(r_fore)
-	# 手套拳头（一体成型）
+	# 手套拳头
 	var r_fist := MeshInstance3D.new()
 	var r_fm := BoxMesh.new()
-	r_fm.size = Vector3(0.065, 0.06, 0.08)
+	r_fm.size = Vector3(0.06, 0.055, 0.075)
 	r_fist.mesh = r_fm
 	r_fist.set_surface_override_material(0, PSXManager.make_psx_material(glove_col))
 	r_fist.position = right_pos + Vector3(0.01, -0.01, 0.0)
@@ -263,30 +253,20 @@ func _add_arms(left_pos: Vector3, right_pos: Vector3) -> void:
 	var l_arm := Node3D.new()
 	l_arm.name = "ArmL"
 	gun_pivot.add_child(l_arm)
-	# 上臂（袖口）
-	var l_upper := MeshInstance3D.new()
-	var l_up_m := CapsuleMesh.new()
-	l_up_m.radius = 0.045
-	l_up_m.height = 0.28
-	l_upper.mesh = l_up_m
-	l_upper.set_surface_override_material(0, PSXManager.make_psx_material(sleeve_col))
-	l_upper.rotation_degrees = Vector3(60, 12, 5)
-	l_upper.position = left_pos + Vector3(-0.05, 0.10, 0.18)
-	l_arm.add_child(l_upper)
-	# 前臂（肤色）
+	# 前臂（从画面左下角伸入）
 	var l_fore := MeshInstance3D.new()
 	var l_fo_m := CapsuleMesh.new()
-	l_fo_m.radius = 0.04
-	l_fo_m.height = 0.20
+	l_fo_m.radius = 0.038
+	l_fo_m.height = 0.24
 	l_fore.mesh = l_fo_m
-	l_fore.set_surface_override_material(0, PSXManager.make_psx_material(skin_col))
-	l_fore.rotation_degrees = Vector3(70, 8, 0)
-	l_fore.position = left_pos + Vector3(-0.03, 0.03, 0.08)
+	l_fore.set_surface_override_material(0, PSXManager.make_psx_material(sleeve_col))
+	l_fore.rotation_degrees = Vector3(65, 10, 5)
+	l_fore.position = left_pos + Vector3(-0.04, 0.06, 0.12)
 	l_arm.add_child(l_fore)
-	# 手套拳头（一体成型）
+	# 手套拳头
 	var l_fist := MeshInstance3D.new()
 	var l_fm := BoxMesh.new()
-	l_fm.size = Vector3(0.065, 0.055, 0.09)
+	l_fm.size = Vector3(0.06, 0.05, 0.085)
 	l_fist.mesh = l_fm
 	l_fist.set_surface_override_material(0, PSXManager.make_psx_material(glove_col))
 	l_fist.position = left_pos + Vector3(-0.01, -0.01, 0.0)
