@@ -152,7 +152,9 @@ func _ready() -> void:
 
 	# ── Cache visual children for animations (exclude CollisionShape3D, NavAgent, Label) ──
 	for child in get_children():
-		if child is MeshInstance3D or child.name in ["GunPivot"]:
+		if child is CollisionShape3D or child is NavigationAgent3D or child is Label3D:
+			continue
+		if child is Node3D:
 			_visual_nodes.append(child)
 	# ── Spawn-in: scale visuals from zero (NOT the root — breaks collision) ──
 	for vn in _visual_nodes:
@@ -778,14 +780,16 @@ func _animate_limbs(delta: float) -> void:
 	var leg_r := get_node_or_null("LegR") as Node3D
 	var arm_l := get_node_or_null("ArmL") as Node3D
 	var arm_r := get_node_or_null("ArmR") as Node3D
-	if leg_l == null:
+	if leg_l == null or leg_r == null:
 		return
 	var hvel := Vector2(velocity.x, velocity.z).length()
-	if hvel > 0.5:
+	if hvel > 0.3:
 		_walk_time += delta * WALK_FREQ
 		var s := sin(_walk_time)
+		# Legs swing forward/back from hip pivot
 		leg_l.rotation.x = s * WALK_LEG_AMP
 		leg_r.rotation.x = -s * WALK_LEG_AMP
+		# Arms counter-swing from shoulder pivot
 		if arm_l:
 			arm_l.rotation.x = -s * WALK_ARM_AMP
 		if arm_r:
@@ -802,7 +806,7 @@ func _animate_limbs(delta: float) -> void:
 func _animate_crouch(delta: float) -> void:
 	var target := 1.0 if _is_crouching_anim else 0.0
 	_crouch_blend = lerp(_crouch_blend, target, delta * 6.0)
-	for child_name in ["MeshInstance3D", "Head", "Helmet", "ArmL", "ArmR", "GunPivot"]:
+	for child_name in ["MeshInstance3D", "Head", "Helmet", "ArmL", "ArmR", "LegL", "LegR", "GunPivot"]:
 		var node := get_node_or_null(child_name) as Node3D
 		if node:
 			if not node.has_meta("_base_y"):

@@ -146,12 +146,12 @@ func _build_enemy() -> CharacterBody3D:
 	root.add_child(_make_sphere("Head", 0.2, 0.4, Color(0.75, 0.55, 0.4), Vector3(0, 1.08, 0)))
 	# Helmet
 	root.add_child(_make_sphere("Helmet", 0.215, 0.3, c.darkened(0.35), Vector3(0, 1.17, 0)))
-	# Arms
-	root.add_child(_make_capsule("ArmL", 0.09, 0.5, c.darkened(0.2), Vector3(-0.38, 0.45, 0), Vector3(0, 0, 25)))
-	root.add_child(_make_capsule("ArmR", 0.09, 0.5, c.darkened(0.2), Vector3(0.38, 0.45, 0), Vector3(0, 0, -25)))
-	# Legs
-	root.add_child(_make_capsule("LegL", 0.1, 0.55, Color(0.15, 0.15, 0.2), Vector3(-0.17, 0.0, 0)))
-	root.add_child(_make_capsule("LegR", 0.1, 0.55, Color(0.15, 0.15, 0.2), Vector3(0.17, 0.0, 0)))
+	# Arms — pivot at shoulder, mesh hangs down
+	root.add_child(_make_limb("ArmL", 0.09, 0.5, c.darkened(0.2), Vector3(-0.38, 0.55, 0), Vector3(0, 0, 25)))
+	root.add_child(_make_limb("ArmR", 0.09, 0.5, c.darkened(0.2), Vector3(0.38, 0.55, 0), Vector3(0, 0, -25)))
+	# Legs — pivot at hip, mesh hangs down
+	root.add_child(_make_limb("LegL", 0.1, 0.55, Color(0.15, 0.15, 0.2), Vector3(-0.17, 0.22, 0)))
+	root.add_child(_make_limb("LegR", 0.1, 0.55, Color(0.15, 0.15, 0.2), Vector3(0.17, 0.22, 0)))
 
 	# ── Gun in right hand ──
 	var gun := _make_gun(c, stats.get("gun_color", Color(0.12, 0.12, 0.12)), stats.get("gun_barrel_len", 0.18))
@@ -240,3 +240,22 @@ func _make_capsule(node_name: String, radius: float, height: float, color: Color
 	mi.position = pos
 	mi.rotation_degrees = rot_deg
 	return mi
+
+## Create a limb with proper pivot: Node3D at joint, mesh offset downward.
+## This makes rotation.x swing the limb like a pendulum from the joint.
+func _make_limb(node_name: String, radius: float, height: float, color: Color, pivot_pos: Vector3, rot_deg: Vector3 = Vector3.ZERO) -> Node3D:
+	var pivot := Node3D.new()
+	pivot.name = node_name
+	pivot.position = pivot_pos
+	pivot.rotation_degrees = rot_deg
+	# Mesh hangs down from pivot (center at -height/2)
+	var mi := MeshInstance3D.new()
+	mi.name = "Mesh"
+	var m := CapsuleMesh.new()
+	m.radius = radius
+	m.height = height
+	mi.mesh = m
+	mi.set_surface_override_material(0, PSXManager.make_psx_material(color))
+	mi.position = Vector3(0, -height * 0.5, 0)
+	pivot.add_child(mi)
+	return pivot
