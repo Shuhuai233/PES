@@ -3,6 +3,16 @@ extends CharacterBody3D
 ## PlayerController - FPS movement, mouse look, crouch, sprint, jump, recoil, gun jam
 ## 所有可调参数均已用 @export 暴露到 Inspector
 const ItemDataRes := preload("res://scripts/item_data.gd")
+const ItemDB := preload("res://scripts/item_database.gd")
+
+## Quick-select weapon slot IDs (index 0 = slot 1, …, index 4 = slot 5)
+const QUICK_SLOT_IDS: Array[StringName] = [
+	&"shotgun_cqc",    # 1 — CQC
+	&"smg_short",      # 2 — Short
+	&"ar_medium",      # 3 — Medium
+	&"dmr_long",       # 4 — Long
+	&"sniper_disc",    # 5 — Discouraged
+]
 
 # ─────────────────────────────────────────────
 # @export 参数分组
@@ -76,6 +86,7 @@ const ItemDataRes := preload("res://scripts/item_data.gd")
 @export var shoot_cooldown: float = 0.12       ## 射速间隔（秒），越小越快
 @export var reload_time: float = 2.0
 @export var muzzle_flash_duration: float = 0.05
+@export var raycast_range: float = 30.0        ## 射线检测距离（米）
 
 # ─────────────────────────────────────────────
 # 节点引用
@@ -104,6 +115,12 @@ var shoot_timer: float = 0.0
 var current_ammo: int = 0
 var is_reloading: bool = false
 var reload_timer: float = 0.0
+
+# 快速切换武器槽（1-5），-1 表示未选中
+var current_quick_slot: int = -1
+
+# 当前装备的武器名（用于 HUD 显示）
+var equipped_weapon_name: String = ""
 
 # 后坐力
 var recoil_current_v: float = 0.0
@@ -142,6 +159,7 @@ signal jam_cleared()
 signal shot_fired()
 signal enemy_hit(node: Node)
 signal stamina_changed(current: float, max_val: float)
+signal weapon_changed(weapon_name: String, slot: int)
 
 # ─────────────────────────────────────────────
 # 初始化
@@ -156,6 +174,8 @@ func _ready() -> void:
 	target_head_y = stand_head_y
 	target_capsule_height = stand_height
 	_build_gun()
+	# 默认装备 Slot 3（突击步枪）
+	_equip_quick_slot(2)
 
 # ─────────────────────────────────────────────
 # 枪械构建（加载 GLB 资产）
@@ -225,6 +245,11 @@ func _input(event: InputEvent) -> void:
 			Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 		else:
 			Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	# 快速切换武器槽 1-5
+	for i in range(5):
+		if event.is_action_pressed("weapon_slot_%d" % (i + 1)):
+			_equip_quick_slot(i)
+			break
 
 # ─────────────────────────────────────────────
 # 主逻辑帧
@@ -498,13 +523,14 @@ func _try_shoot() -> void:
 	# 应用扩散偏移到 RayCast
 	var spread := _get_current_spread()
 	if raycast:
+		var ray_z := -raycast_range
 		if spread > 0.001:
 			raycast.target_position = Vector3(
 				randf_range(-spread, spread),
 				randf_range(-spread, spread),
-				-30.0)
+				ray_z)
 		else:
-			raycast.target_position = Vector3(0, 0, -30.0)
+			raycast.target_position = Vector3(0, 0, ray_z)
 
 	# 射线检测命中
 	if raycast and raycast.is_colliding():
@@ -588,12 +614,18 @@ func equip_weapon(item: Resource) -> void:
 	reload_time = item.weapon_reload_time
 	jam_chance = item.weapon_jam_chance
 	spread_base = item.weapon_spread
+	raycast_range = item.weapon_range if "weapon_range" in item else 30.0
 	# Refill ammo
 	current_ammo = magazine_size
 	is_reloading = false
 	is_jammed = false
 	can_shoot = true
+	equipped_weapon_name = item.display_name
 	ammo_changed.emit(current_ammo, magazine_size)
+	weapon_changed.emit(equipped_weapon_name, item.weapon_slot if "weapon_slot" in item else 0)
+	# Update raycast length
+	if raycast:
+		raycast.target_position = Vector3(0, 0, -raycast_range)
 	# Rebuild gun visuals with item color
 	if gun_pivot:
 		var body := gun_pivot.get_node_or_null("Body") as MeshInstance3D
@@ -605,6 +637,19 @@ func equip_weapon(item: Resource) -> void:
 					break
 		if body:
 			body.set_surface_override_material(0, PSXManager.make_psx_material(item.mesh_color))
+
+## Quick-equip a weapon by slot index (0-based, so slot 1 = index 0)
+func _equip_quick_slot(slot_idx: int) -> void:
+	if slot_idx < 0 or slot_idx >= QUICK_SLOT_IDS.size():
+		return
+	if current_quick_slot == slot_idx:
+		return
+	var item_id: StringName = QUICK_SLOT_IDS[slot_idx]
+	var item: Resource = ItemDB.get_item(item_id)
+	if item == null:
+		return
+	current_quick_slot = slot_idx
+	equip_weapon(item)
 
 # ─────────────────────────────────────────────
 # 辅助查询

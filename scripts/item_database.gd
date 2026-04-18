@@ -14,6 +14,37 @@ static func _ensure_init() -> void:
 	_initialized = true
 
 	# ── Weapons ──────────────────────────────
+	# Slot 1 — CQC (0-5m): 霰弹枪，宽扩散高伤，近距离一击必杀
+	_register(_weapon(&"shotgun_cqc", "CQC Shotgun",
+		"[CQC 0-5m] 近距离毁灭性打击。超出5m伤害急剧衰减。",
+		ItemDataRes.Rarity.RARE, 80, 0.55, 6, 2.5, 0.04, 0.12,
+		Color(0.45, 0.22, 0.08), 8.0, 1))
+
+	# Slot 2 — Short (5-15m): 冲锋枪，高射速低单发伤，15m外衰减快
+	_register(_weapon(&"smg_short", "Compact SMG",
+		"[Short 5-15m] 高速连射，近距离压制利器。超出15m精度崩溃。",
+		ItemDataRes.Rarity.UNCOMMON, 14, 0.07, 30, 1.8, 0.06, 0.025,
+		Color(0.22, 0.28, 0.35), 20.0, 2))
+
+	# Slot 3 — Medium (15-40m): 突击步枪，各项均衡
+	_register(_weapon(&"ar_medium", "Assault Rifle",
+		"[Medium 15-40m] 标准突击步枪。全能均衡，无明显短板。",
+		ItemDataRes.Rarity.COMMON, 28, 0.13, 25, 2.0, 0.08, 0.005,
+		Color(0.18, 0.22, 0.18), 50.0, 3))
+
+	# Slot 4 — Long (40-100m): DMR半自动精确步枪，高单发伤低射速
+	_register(_weapon(&"dmr_long", "Marksman Rifle",
+		"[Long 40-100m] 半自动精确步枪。沉稳击发，远距离点名。",
+		ItemDataRes.Rarity.UNCOMMON, 65, 0.55, 10, 2.2, 0.05, 0.002,
+		Color(0.28, 0.24, 0.16), 100.0, 4))
+
+	# Slot 5 — Discouraged (100m+): 狙击枪，极高伤极慢射速，需保持静止
+	_register(_weapon(&"sniper_disc", "Anti-Materiel Sniper",
+		"[Discouraged 100m+] 反器材狙击枪。一发入魂，换弹极慢。移动中精度归零。",
+		ItemDataRes.Rarity.RARE, 150, 1.5, 5, 3.5, 0.02, 0.001,
+		Color(0.12, 0.12, 0.16), 150.0, 5))
+
+	# ── Legacy / Inventory Weapons ────────────
 	_register(_weapon(&"pistol_default", "Service Pistol",
 		"Standard-issue sidearm. Nothing special.",
 		ItemDataRes.Rarity.COMMON, 25, 0.12, 15, 2.0, 0.12, 0.0,
@@ -97,7 +128,8 @@ static func _weapon(
 	p_rarity: ItemDataRes.Rarity,
 	p_dmg: int, p_fire_rate: float, p_mag: int,
 	p_reload: float, p_jam: float, p_spread: float,
-	p_color: Color
+	p_color: Color,
+	p_range: float = 30.0, p_slot: int = 0
 ) -> Resource:
 	var d := ItemDataRes.new()
 	d.id = p_id
@@ -114,6 +146,8 @@ static func _weapon(
 	d.weapon_reload_time = p_reload
 	d.weapon_jam_chance = p_jam
 	d.weapon_spread = p_spread
+	d.weapon_range = p_range
+	d.weapon_slot = p_slot
 	d.mesh_color = p_color
 	d.mesh_scale = Vector3(0.3, 0.15, 0.15)
 	return d
