@@ -203,7 +203,8 @@ func _ready() -> void:
 # Hip-fire 位置（枪在画面右下角，占屏幕 ~30-35%）
 const GUN_HIP_POS := Vector3(0.32, -0.32, -0.50)
 # ADS 位置（枪居中偏下，瞄具顶端对齐准星）
-const GUN_ADS_POS := Vector3(0.0, -0.14, -0.42)
+# sight dot Y ≈ 0.13 in pivot space, so ADS_Y = -0.13 → dot at camera Y=0
+const GUN_ADS_POS := Vector3(0.0, -0.13, -0.38)
 
 func _build_gun() -> void:
 	gun_pivot = Node3D.new()
@@ -272,65 +273,64 @@ func _add_arms(left_pos: Vector3, right_pos: Vector3) -> void:
 	l_fist.position = left_pos + Vector3(-0.01, -0.01, 0.0)
 	l_arm.add_child(l_fist)
 
-## 添加机械瞄具（前准星 + 后照门），适用于无光学瞄具的武器
-## front_z: 前准星 Z 位置, rear_z: 后照门 Z 位置, top_y: 瞄具顶部 Y
-func _add_iron_sights(front_z: float, rear_z: float, top_y: float, sight_col: Color = Color(0.08, 0.08, 0.08)) -> void:
+## 添加机械瞄具（前准星 + 后照门）
+## front_z: 前准星 Z 位置, rear_z: 后照门 Z 位置, rail_y: 导轨顶面 Y（枪身顶部）
+func _add_iron_sights(front_z: float, rear_z: float, rail_y: float) -> void:
+	var sight_col := Color(0.06, 0.06, 0.06)
 	var mat := PSXManager.make_psx_material(sight_col)
-	var dot_mat := PSXManager.make_psx_material(Color(1.0, 0.3, 0.1))  # 前准星荧光点
+	var dot_col := Color(1.0, 0.3, 0.1)  # 前准星荧光点
+	var dot_mat := PSXManager.make_psx_material(dot_col)
+	# 统一瞄具顶端高度 = 0.13（所有武器一致，方便 ADS 对齐）
+	var sight_top: float = 0.13
 
-	# 前准星柱（细长竖条 + 顶部荧光点）
+	# ── 前准星 ──
+	# 底座柱（从导轨伸出）
+	var fs_height: float = sight_top - rail_y + 0.01
 	var fs_base := MeshInstance3D.new()
 	fs_base.name = "FrontSight"
 	var fsm := BoxMesh.new()
-	fsm.size = Vector3(0.016, 0.04, 0.012)
+	fsm.size = Vector3(0.014, fs_height, 0.010)
 	fs_base.mesh = fsm
-	fs_base.position = Vector3(0, top_y - 0.01, front_z)
+	fs_base.position = Vector3(0, rail_y + fs_height * 0.5, front_z)
 	fs_base.set_surface_override_material(0, mat)
 	gun_pivot.add_child(fs_base)
-	# 前准星护翼（两侧小翼）
-	for side in [-1.0, 1.0]:
-		var wing := MeshInstance3D.new()
-		var wm := BoxMesh.new()
-		wm.size = Vector3(0.006, 0.028, 0.016)
-		wing.mesh = wm
-		wing.position = Vector3(0.014 * side, top_y - 0.015, front_z)
-		wing.set_surface_override_material(0, mat)
-		gun_pivot.add_child(wing)
-	# 荧光点
+	# 荧光准星点（最顶端）
 	var dot := MeshInstance3D.new()
+	dot.name = "FrontDot"
 	var dm := BoxMesh.new()
-	dm.size = Vector3(0.008, 0.008, 0.008)
+	dm.size = Vector3(0.010, 0.010, 0.010)
 	dot.mesh = dm
-	dot.position = Vector3(0, top_y + 0.012, front_z)
+	dot.position = Vector3(0, sight_top + 0.005, front_z)
 	dot.set_surface_override_material(0, dot_mat)
 	gun_pivot.add_child(dot)
 
-	# 后照门（U 形缺口）
-	var rs_left := MeshInstance3D.new()
-	rs_left.name = "RearSightL"
+	# ── 后照门（U 形缺口）──
+	var rs_height: float = sight_top - rail_y + 0.01
+	# 左柱
+	var rs_l := MeshInstance3D.new()
+	rs_l.name = "RearSightL"
 	var rlm := BoxMesh.new()
-	rlm.size = Vector3(0.012, 0.03, 0.016)
-	rs_left.mesh = rlm
-	rs_left.position = Vector3(-0.016, top_y - 0.008, rear_z)
-	rs_left.set_surface_override_material(0, mat)
-	gun_pivot.add_child(rs_left)
-
-	var rs_right := MeshInstance3D.new()
-	rs_right.name = "RearSightR"
+	rlm.size = Vector3(0.010, rs_height, 0.012)
+	rs_l.mesh = rlm
+	rs_l.position = Vector3(-0.018, rail_y + rs_height * 0.5, rear_z)
+	rs_l.set_surface_override_material(0, mat)
+	gun_pivot.add_child(rs_l)
+	# 右柱
+	var rs_r := MeshInstance3D.new()
+	rs_r.name = "RearSightR"
 	var rrm := BoxMesh.new()
-	rrm.size = Vector3(0.012, 0.03, 0.016)
-	rs_right.mesh = rrm
-	rs_right.position = Vector3(0.016, top_y - 0.008, rear_z)
-	rs_right.set_surface_override_material(0, mat)
-	gun_pivot.add_child(rs_right)
-
-	# 后照门底座横杠
+	rrm.size = Vector3(0.010, rs_height, 0.012)
+	rs_r.mesh = rrm
+	rs_r.position = Vector3(0.018, rail_y + rs_height * 0.5, rear_z)
+	rs_r.set_surface_override_material(0, mat)
+	gun_pivot.add_child(rs_r)
+	# 底座横杠
 	var rs_bar := MeshInstance3D.new()
 	rs_bar.name = "RearSightBar"
 	var rbm := BoxMesh.new()
-	rbm.size = Vector3(0.044, 0.012, 0.016)
+	rbm.size = Vector3(0.046, 0.010, 0.012)
 	rs_bar.mesh = rbm
-	rs_bar.position = Vector3(0, top_y - 0.02, rear_z)
+	rs_bar.position = Vector3(0, rail_y + 0.005, rear_z)
 	rs_bar.set_surface_override_material(0, mat)
 	gun_pivot.add_child(rs_bar)
 
@@ -395,8 +395,8 @@ func _make_gun_shotgun() -> void:
 	grip.set_surface_override_material(0, PSXManager.make_psx_material(col.darkened(0.4)))
 	gun_pivot.add_child(grip)
 	gun_mesh = body
-	# 机瞄（散弹枪用大号珠状前准星）
-	_add_iron_sights(-0.24, 0.10, 0.13)
+	# 机瞄（散弹枪：导轨顶面 Y=0.10）
+	_add_iron_sights(-0.24, 0.10, 0.10)
 	# 手臂：左手握泵，右手握把
 	_add_arms(Vector3(0, -0.06, -0.18), Vector3(0, -0.10, 0.13))
 
@@ -447,8 +447,8 @@ func _make_gun_smg() -> void:
 	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.12, 0.12, 0.12)))
 	gun_pivot.add_child(grip)
 	gun_mesh = body
-	# 机瞄
-	_add_iron_sights(-0.20, 0.08, 0.10)
+	# 机瞄（SMG：导轨顶面 Y=0.08）
+	_add_iron_sights(-0.20, 0.08, 0.08)
 	# 手臂：左手握枪身前端，右手握把
 	_add_arms(Vector3(0, -0.04, -0.10), Vector3(0, -0.08, 0.11))
 
@@ -508,8 +508,8 @@ func _make_gun_ar() -> void:
 	grip.set_surface_override_material(0, PSXManager.make_psx_material(Color(0.1, 0.1, 0.1)))
 	gun_pivot.add_child(grip)
 	gun_mesh = body
-	# 机瞄（AR 用翻转式机瞄，护手上方有皮卡汀尼导轨）
-	_add_iron_sights(-0.38, 0.06, 0.11)
+	# 机瞄（AR bullpup：导轨顶面 Y=0.08）
+	_add_iron_sights(-0.38, 0.06, 0.08)
 	# 手臂：左手握护手，右手握把
 	_add_arms(Vector3(0, -0.04, -0.28), Vector3(0, -0.08, 0.13))
 
