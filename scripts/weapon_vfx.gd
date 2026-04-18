@@ -250,6 +250,33 @@ static func spawn_tracer(muzzle_pos: Vector3, hit_point: Vector3, scene_root: No
 	tw.tween_interval(0.3)
 	tw.tween_property(tracer, "scale", Vector3.ZERO, 0.15)
 	tw.tween_callback(_return_to_pool.bind("tracer", tracer))
+	# ── 火光残留：沿弹道路径生成发光粒子 ──
+	_spawn_fire_trail(muzzle_pos, hit_point, dist, scene_root)
+
+## 弹道火光残留（沿路径生成逐渐消失的橙色光点）
+static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_root: Node) -> void:
+	var trail_count: int = clampi(int(dist / 2.0), 3, 10)
+	var direction := (end - start).normalized()
+	for i in trail_count:
+		var t: float = float(i + 1) / float(trail_count + 1)
+		var pos := start.lerp(end, t)
+		var particle := MeshInstance3D.new()
+		var pm := BoxMesh.new()
+		var s: float = randf_range(0.015, 0.03)
+		pm.size = Vector3(s, s, s)
+		particle.mesh = pm
+		particle.set_surface_override_material(0, _get_mat(
+			Color(1.0, randf_range(0.4, 0.7), 0.1, 0.8)))
+		scene_root.add_child(particle)
+		particle.global_position = pos + Vector3(
+			randf_range(-0.02, 0.02), randf_range(-0.02, 0.02), randf_range(-0.02, 0.02))
+		# 每个火光粒子停留后渐小消失
+		var delay: float = t * 0.05  # 前面的先出现
+		var ptw := particle.create_tween()
+		ptw.tween_interval(delay)
+		ptw.tween_interval(randf_range(0.2, 0.5))  # 停留
+		ptw.tween_property(particle, "scale", Vector3.ZERO, randf_range(0.15, 0.3))
+		ptw.tween_callback(particle.queue_free)
 
 # ─────────────────────────────────────────────
 # Sniper charge ring

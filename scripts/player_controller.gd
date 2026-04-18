@@ -74,13 +74,13 @@ const QUICK_SLOT_IDS: Array[StringName] = [
 @export var landing_impact_speed: float = 6.0       ## 落地冲击传导给镜头的速度系数
 
 @export_group("Recoil")
-@export var recoil_vertical: float = 2.5         ## 每发镜头上抬角度（度）
-@export var recoil_horizontal: float = 0.6       ## 每发随机水平偏移范围（度）
-@export var recoil_recovery_speed: float = 4.0   ## 后坐力恢复速度
-@export var recoil_max_vertical: float = 14.0    ## 最大累计垂直后坐力（度）
-@export var recoil_kick_pos: float = 0.04        ## 枪械模型向后位移量（纯视觉）
-@export var recoil_kick_rot: float = 5.0         ## 枪械模型旋转踢角度（纯视觉，度）
-@export var recoil_apply_speed: float = 18.0     ## 后坐力施加到镜头的速度
+@export var recoil_vertical: float = 3.5         ## 每发镜头上抬角度（度）
+@export var recoil_horizontal: float = 0.8       ## 每发随机水平偏移范围（度）
+@export var recoil_recovery_speed: float = 3.5   ## 后坐力恢复速度
+@export var recoil_max_vertical: float = 18.0    ## 最大累计垂直后坐力（度）
+@export var recoil_kick_pos: float = 0.05        ## 枪械模型向后位移量（纯视觉）
+@export var recoil_kick_rot: float = 6.0         ## 枪械模型旋转踢角度（纯视觉，度）
+@export var recoil_apply_speed: float = 20.0     ## 后坐力施加到镜头的速度
 
 @export_group("Spread / Accuracy")
 @export var spread_base: float = 0.0           ## 静止精度偏移（单位：米，以30m处为基准）
