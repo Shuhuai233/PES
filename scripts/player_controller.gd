@@ -69,7 +69,7 @@ const QUICK_SLOT_IDS: Array[StringName] = [
 @export var recoil_max_vertical: float = 8.0     ## 最大累计垂直后坐力（度）
 @export var recoil_kick_pos: float = 0.025       ## 枪械向后位移量
 @export var recoil_kick_rot: float = 8.0         ## 枪械旋转踢脚角度（度）
-@export var jam_kick_rot: float = 12.0           ## 卡壳时枪械旋转角度（度）
+
 
 @export_group("Spread / Accuracy")
 @export var spread_base: float = 0.0           ## 静止精度偏移（单位：米，以30m处为基准）
@@ -81,7 +81,6 @@ const QUICK_SLOT_IDS: Array[StringName] = [
 
 @export_group("Gun")
 @export var damage_per_shot: int = 25
-@export var jam_chance: float = 0.12
 @export var magazine_size: int = 15
 @export var shoot_cooldown: float = 0.12       ## 射速间隔（秒），越小越快
 @export var reload_time: float = 2.0
@@ -109,7 +108,6 @@ var inventory_open: bool = false
 # ─────────────────────────────────────────────
 
 # 枪械
-var is_jammed: bool = false
 var can_shoot: bool = true
 var shoot_timer: float = 0.0
 var current_ammo: int = 0
@@ -160,8 +158,6 @@ var _shake_offset: Vector3 = Vector3.ZERO
 # 信号
 # ─────────────────────────────────────────────
 signal ammo_changed(current: int, max_ammo: int)
-signal jammed()
-signal jam_cleared()
 signal shot_fired()
 signal enemy_hit(node: Node)
 signal stamina_changed(current: float, max_val: float)
@@ -583,9 +579,7 @@ func _tick_reload(delta: float) -> void:
 			_finish_reload()
 
 func _handle_action_input() -> void:
-	if Input.is_action_just_pressed("clear_jam") and is_jammed:
-		_clear_jam()
-	if Input.is_action_just_pressed("reload") and not is_reloading and not is_jammed:
+	if Input.is_action_just_pressed("reload") and not is_reloading:
 		_start_reload()
 	# 奔跑时若禁止开枪则跳过
 	if is_sprinting() and not sprint_can_shoot:
@@ -800,18 +794,8 @@ func _update_stamina(delta: float) -> void:
 # 开枪
 # ─────────────────────────────────────────────
 func _try_shoot() -> void:
-	if is_jammed:
-		jammed.emit()
-		return
 	if current_ammo <= 0:
 		_start_reload()
-		return
-	if randf() < jam_chance:
-		is_jammed = true
-		can_shoot = false
-		jammed.emit()
-		_flash_muzzle()
-		_kick_gun(true)
 		return
 
 	current_ammo -= 1
@@ -850,14 +834,13 @@ func _try_shoot() -> void:
 # ─────────────────────────────────────────────
 # 枪械动画
 # ─────────────────────────────────────────────
-func _kick_gun(is_jam: bool) -> void:
+func _kick_gun(_unused: bool = false) -> void:
 	if gun_pivot == null:
 		return
 	var tween := create_tween()
 	var kick_pos := bob_origin + Vector3(0, recoil_kick_pos * 0.5, recoil_kick_pos)
-	var rot_v := -recoil_kick_rot if not is_jam else -jam_kick_rot
-	var rot_h := randf_range(-recoil_horizontal * 10.0, recoil_horizontal * 10.0) \
-		if not is_jam else randf_range(-3.0, 3.0)
+	var rot_v := -recoil_kick_rot
+	var rot_h := randf_range(-recoil_horizontal * 10.0, recoil_horizontal * 10.0)
 	tween.tween_property(gun_pivot, "position", kick_pos, 0.04)
 	tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, 0), 0.04)
 	tween.tween_property(gun_pivot, "position", bob_origin, 0.1)
@@ -874,15 +857,6 @@ func _on_land(strength: float) -> void:
 	head.rotation.x = clamp(
 		head.rotation.x + deg_to_rad(strength * landing_impact_speed),
 		deg_to_rad(-85), deg_to_rad(85))
-
-func _clear_jam() -> void:
-	is_jammed = false
-	can_shoot = true
-	jam_cleared.emit()
-	if gun_pivot:
-		var tween := create_tween()
-		tween.tween_property(gun_pivot, "position", bob_origin + Vector3(0, 0, 0.12), 0.1)
-		tween.tween_property(gun_pivot, "position", bob_origin, 0.15)
 
 func _start_reload() -> void:
 	if current_ammo == magazine_size:
@@ -977,13 +951,11 @@ func equip_weapon(item: Resource) -> void:
 	shoot_cooldown = item.fire_rate
 	magazine_size = item.weapon_magazine
 	reload_time = item.weapon_reload_time
-	jam_chance = item.weapon_jam_chance
 	spread_base = item.weapon_spread
 	raycast_range = item.weapon_range if "weapon_range" in item else 30.0
 	# Refill ammo
 	current_ammo = magazine_size
 	is_reloading = false
-	is_jammed = false
 	can_shoot = true
 	equipped_weapon_name = item.display_name
 	ammo_changed.emit(current_ammo, magazine_size)
@@ -1074,7 +1046,6 @@ func get_ammo_data() -> Dictionary:
 	return {
 		"current": current_ammo,
 		"max": magazine_size,
-		"jammed": is_jammed,
 		"reloading": is_reloading
 	}
 

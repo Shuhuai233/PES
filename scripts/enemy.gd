@@ -73,6 +73,8 @@ var _slot_request_timer: float = 0.0
 var _bark_cooldown: float = 0.0
 var _cover_eval_timer: float = 5.0
 var _last_cover_score: float = 0.0
+var _debug_line_mesh: MeshInstance3D = null
+var _debug_ft_line: MeshInstance3D = null
 
 @onready var mesh: MeshInstance3D = $MeshInstance3D
 
@@ -621,8 +623,76 @@ func _update_debug_label() -> void:
 	var sn: String = State.keys()[state]
 	_debug_label.text = "%s [%s] FT:%d\nHP:%d" % [sn, ARCHETYPE_NAMES[archetype], fireteam, health]
 	_debug_label.modulate = STATE_COLORS.get(sn, Color.WHITE)
+	# Draw debug lines
+	_draw_debug_lines()
 
 func set_debug_visible(vis: bool) -> void:
 	if _debug_label == null: return
 	_debug_label.visible = vis
 	if vis: _update_debug_label()
+	else: _clear_debug_lines()
+
+func _draw_debug_lines() -> void:
+	# Line to target cover (yellow if seeking, green if in cover)
+	_clear_debug_lines()
+	if _cover_point and is_instance_valid(_cover_point):
+		var color: Color
+		match state:
+			State.SEEK_COVER: color = Color.YELLOW
+			State.IN_COVER: color = Color.GREEN
+			State.PEEK_SHOOT: color = Color.ORANGE
+			State.RETREAT: color = Color.CYAN
+			_: color = Color.WHITE
+		_debug_line_mesh = _make_line(global_position + Vector3(0, 1.0, 0),
+			_cover_point.global_position + Vector3(0, 0.5, 0), color)
+	elif state == State.ADVANCE and _player and is_instance_valid(_player):
+		_debug_line_mesh = _make_line(global_position + Vector3(0, 1.0, 0),
+			_player.global_position + Vector3(0, 1.0, 0), Color.RED)
+	elif state == State.FLANK:
+		_debug_line_mesh = _make_line(global_position + Vector3(0, 1.0, 0),
+			_flank_target + Vector3(0, 0.5, 0), Color.MAGENTA)
+
+	# Fireteam connection lines (thin blue/orange to nearest teammate)
+	var sm = get_node_or_null("/root/SquadManager")
+	if sm:
+		var members: Array = sm.get_fireteam_members(fireteam)
+		var nearest_dist: float = 999.0
+		var nearest_ally: Node3D = null
+		for ally in members:
+			if ally == self: continue
+			var d: float = global_position.distance_to(ally.global_position)
+			if d < nearest_dist:
+				nearest_dist = d
+				nearest_ally = ally
+		if nearest_ally:
+			var ft_color: Color = Color(0.3, 0.5, 1.0, 0.6) if fireteam == 0 else Color(1.0, 0.5, 0.2, 0.6)
+			_debug_ft_line = _make_line(global_position + Vector3(0, 0.3, 0),
+				nearest_ally.global_position + Vector3(0, 0.3, 0), ft_color)
+
+func _clear_debug_lines() -> void:
+	if _debug_line_mesh and is_instance_valid(_debug_line_mesh):
+		_debug_line_mesh.queue_free()
+		_debug_line_mesh = null
+	if _debug_ft_line and is_instance_valid(_debug_ft_line):
+		_debug_ft_line.queue_free()
+		_debug_ft_line = null
+
+func _make_line(from: Vector3, to: Vector3, color: Color) -> MeshInstance3D:
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	im.surface_set_color(color)
+	im.surface_add_vertex(from)
+	im.surface_set_color(color)
+	im.surface_add_vertex(to)
+	im.surface_end()
+	var mi := MeshInstance3D.new()
+	mi.mesh = im
+	mi.name = "DebugLine"
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.no_depth_test = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mi.set_surface_override_material(0, mat)
+	get_tree().current_scene.add_child(mi)
+	return mi

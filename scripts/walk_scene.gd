@@ -185,8 +185,6 @@ func _setup_dust_particles() -> void:
 func _connect_signals() -> void:
 	# Player signals
 	player.ammo_changed.connect(ui.update_ammo)
-	player.jammed.connect(_on_player_jammed)
-	player.jam_cleared.connect(_on_jam_cleared)
 	player.shot_fired.connect(_on_shot_fired)
 	player.stamina_changed.connect(ui.update_stamina)
 	player.weapon_changed.connect(ui.update_weapon)
@@ -353,6 +351,9 @@ func _toggle_debug() -> void:
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy.has_method("set_debug_visible"):
 			enemy.set_debug_visible(_debug_ai)
+	# Disable PSX postprocess when debug is on (so labels are readable)
+	if psx_overlay:
+		psx_overlay.visible = not _debug_ai
 	# Toggle hand-drawn NavMesh overlay
 	_toggle_navmesh_debug_mesh()
 	# Toggle cover point markers
@@ -565,10 +566,6 @@ func _process(_delta: float) -> void:
 		if player.current_ammo < player.magazine_size:
 			player.current_ammo = player.magazine_size
 			player.ammo_changed.emit(player.current_ammo, player.magazine_size)
-		if player.is_jammed:
-			player.is_jammed = false
-			player.can_shoot = true
-			player.jam_cleared.emit()
 
 	# ── Debug 面板每帧更新 ────────────────────
 	var ammo_data: Dictionary = player.get_ammo_data()
@@ -582,9 +579,7 @@ func _process(_delta: float) -> void:
 		"weapon_range":  player.raycast_range,
 		"spread_current": player.current_spread,
 		"spread_base":   player.spread_base,
-		"jam_chance":    player.jam_chance,
 		"reload_time":   player.reload_time,
-		"jammed":        ammo_data.get("jammed", false),
 		"reloading":     ammo_data.get("reloading", false),
 	})
 
@@ -594,18 +589,6 @@ func _process(_delta: float) -> void:
 # ─────────────────────────────────────────────
 # Callbacks — combat
 # ─────────────────────────────────────────────
-func _on_player_jammed() -> void:
-	ui.show_jam(true)
-	SessionManager.set_value("jams_encountered",
-		int(SessionManager.get_value("jams_encountered", 0)) + 1)
-
-func _on_jam_cleared() -> void:
-	ui.show_jam(false)
-	if ui.current_step == ui.TutorialStep.JAM_CLEAR:
-		ui.advance_step()
-	elif ui.current_step == ui.TutorialStep.RELOAD:
-		ui.advance_step()
-
 func _on_shot_fired() -> void:
 	SessionManager.set_value("shots_fired",
 		int(SessionManager.get_value("shots_fired", 0)) + 1)
