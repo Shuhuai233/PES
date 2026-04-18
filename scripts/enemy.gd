@@ -71,7 +71,7 @@ var _debug_label: Label3D = null
 var _peek_shoot_count: int = 0
 var _slot_request_timer: float = 0.0
 var _bark_cooldown: float = 0.0
-var _cover_eval_timer: float = 5.0
+var _cover_eval_timer: float = 10.0
 var _last_cover_score: float = 0.0
 var _debug_line_mesh: MeshInstance3D = null
 var _debug_ft_line: MeshInstance3D = null
@@ -234,13 +234,14 @@ func _state_in_cover(delta: float) -> void:
 			_release_cover(); _cover_point = closer; _nav_target_set = false
 			_transition(State.SEEK_COVER); return
 
-	# 5. Re-evaluate cover
+	# 5. Re-evaluate cover (infrequent, high hysteresis to prevent jittering)
 	if _cover_eval_timer <= 0.0:
-		_cover_eval_timer = 5.0
+		_cover_eval_timer = 10.0  # only every 10 seconds
 		var new_best := _find_best_cover()
 		if new_best and new_best != _cover_point:
 			var new_score := _evaluate_single_cover(new_best)
-			if new_score > _last_cover_score + 8.0:
+			# Only switch if new cover is SIGNIFICANTLY better (+15 threshold)
+			if new_score > _last_cover_score + 15.0:
 				_release_cover(); _cover_point = new_best; _nav_target_set = false
 				_transition(State.SEEK_COVER); return
 
@@ -267,7 +268,7 @@ func _state_peek_shoot(delta: float) -> void:
 		else:
 			if archetype == 2: _peek_shoot_count = 0
 			_transition(State.RETREAT)
-			if _peek_shoot_count >= 3 and randf() < 0.3:
+			if _peek_shoot_count >= 5 and randf() < 0.15:
 				_peek_shoot_count = 0; _release_cover(); _cover_point = null; _nav_target_set = false
 
 # ═══════════════ RETREAT ═══════════════
@@ -461,6 +462,28 @@ func _evaluate_single_cover(cp: Node3D) -> float:
 	if r1 and not r1.collider.is_in_group("player"): score += 20.0
 	else: score -= 15.0
 
+	# 1b. Cover orientation check: the cover point should be on the OPPOSITE
+	# side of the cover object from the player. If the cover point offset
+	# direction aligns with the player direction, the cover is perpendicular
+	# (useless — enemy is exposed from the side).
+	var parent_body := cp.get_parent()
+	if parent_body:
+		var cover_center: Vector3 = parent_body.global_position
+		var cp_offset: Vector3 = (cp_pos - cover_center)
+		cp_offset.y = 0.0
+		var center_to_player: Vector3 = (player_pos - cover_center)
+		center_to_player.y = 0.0
+		if cp_offset.length() > 0.1 and center_to_player.length() > 0.1:
+			var orientation_dot: float = cp_offset.normalized().dot(center_to_player.normalized())
+			# dot < 0 = cover point is on opposite side from player = GOOD (hiding behind)
+			# dot > 0 = cover point is on SAME side as player = BAD (exposed)
+			if orientation_dot < -0.3:
+				score += 10.0  # hiding behind cover, good
+			elif orientation_dot > 0.3:
+				score -= 20.0  # same side as player, terrible
+			else:
+				score -= 8.0   # perpendicular, cover doesn't protect
+
 	# 2. Shoot feasibility from peek
 	var to_player := (player_pos - cp_pos); to_player.y = 0.0; to_player = to_player.normalized()
 	var perp := Vector3(-to_player.z, 0, to_player.x)
@@ -513,7 +536,7 @@ func _claim_cover(cover: Node3D) -> void:
 	cover.set_meta("claimed_by", self); _cover_point = cover
 	var time_mult := 1.5 if archetype == 2 else 1.0
 	_cover_timer = randf_range(min_cover_time, max_cover_time) * time_mult
-	_last_cover_score = _evaluate_single_cover(cover); _cover_eval_timer = 5.0
+	_last_cover_score = _evaluate_single_cover(cover); _cover_eval_timer = 10.0
 
 func _release_cover() -> void:
 	if _cover_point and is_instance_valid(_cover_point) and _cover_point.has_meta("claimed_by"):
@@ -539,7 +562,7 @@ func _transition(new_state: State) -> void:
 		State.IN_COVER:
 			var time_mult := 1.5 if archetype == 2 else 1.0
 			_cover_timer = randf_range(min_cover_time, max_cover_time) * time_mult
-			_slot_request_timer = randf_range(0.3, 0.8); _cover_eval_timer = 5.0
+			_slot_request_timer = randf_range(0.3, 0.8); _cover_eval_timer = 10.0
 		State.PEEK_SHOOT: _peek_timer = peek_duration; _burst_remaining = burst_count; _burst_timer = 0.0
 		State.ADVANCE: _advance_shoot_timer = randf_range(0.3, 0.8)
 		State.FLANK: _no_cover_timer = 0.0

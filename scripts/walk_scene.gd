@@ -22,6 +22,11 @@ var in_stage: bool = false
 var session_id: String = ""
 var _debug_ai: bool = false
 var _god_mode: bool = false
+var _free_cam: bool = false
+var _free_cam_node: Camera3D = null
+var _free_cam_speed: float = 15.0
+var _free_cam_yaw: float = 0.0
+var _free_cam_pitch: float = 0.0
 
 # ── Enemy debug overlay (2D, above PSX post-process) ──
 var _enemy_debug_layer: CanvasLayer = null
@@ -232,6 +237,13 @@ func _input(event: InputEvent) -> void:
 			_toggle_debug()
 		if event.keycode == KEY_G or event.physical_keycode == KEY_G:
 			_toggle_god_mode()
+		if event.keycode == KEY_F5 or event.physical_keycode == KEY_F5:
+			_toggle_free_cam()
+	# Free camera mouse look
+	if _free_cam and event is InputEventMouseMotion:
+		_free_cam_yaw -= event.relative.x * 0.002
+		_free_cam_pitch -= event.relative.y * 0.002
+		_free_cam_pitch = clamp(_free_cam_pitch, -1.4, 1.4)
 
 var _f3_toggled_this_frame: bool = false
 var _god_toggled_this_frame: bool = false
@@ -521,9 +533,56 @@ func _reset_f3_toggle() -> void:
 	_f3_toggled_this_frame = false
 
 # ─────────────────────────────────────────────
+# Free Camera (F5)
+# ─────────────────────────────────────────────
+func _toggle_free_cam() -> void:
+	_free_cam = not _free_cam
+	if _free_cam:
+		# Create free camera at player camera position
+		if _free_cam_node == null:
+			_free_cam_node = Camera3D.new()
+			_free_cam_node.name = "FreeCam"
+			_free_cam_node.fov = 90.0
+			_free_cam_node.far = 200.0
+			add_child(_free_cam_node)
+		_free_cam_node.global_transform = player.get_node("Head/Camera3D").global_transform
+		_free_cam_node.current = true
+		# Extract yaw/pitch from current rotation
+		_free_cam_yaw = _free_cam_node.global_rotation.y
+		_free_cam_pitch = _free_cam_node.global_rotation.x
+		# Disable player movement
+		player.set_physics_process(false)
+		print("[Debug] Free camera ON (F5 to return, WASD+mouse to fly, Shift=fast)")
+	else:
+		# Return to player camera
+		player.get_node("Head/Camera3D").current = true
+		player.set_physics_process(true)
+		print("[Debug] Free camera OFF")
+
+func _process_free_cam(delta: float) -> void:
+	if not _free_cam or _free_cam_node == null:
+		return
+	# Rotation
+	_free_cam_node.rotation = Vector3(_free_cam_pitch, _free_cam_yaw, 0)
+	# Movement
+	var move_dir := Vector3.ZERO
+	if Input.is_key_pressed(KEY_W): move_dir -= _free_cam_node.global_basis.z
+	if Input.is_key_pressed(KEY_S): move_dir += _free_cam_node.global_basis.z
+	if Input.is_key_pressed(KEY_A): move_dir -= _free_cam_node.global_basis.x
+	if Input.is_key_pressed(KEY_D): move_dir += _free_cam_node.global_basis.x
+	if Input.is_key_pressed(KEY_E) or Input.is_key_pressed(KEY_SPACE): move_dir += Vector3.UP
+	if Input.is_key_pressed(KEY_Q) or Input.is_key_pressed(KEY_CTRL): move_dir -= Vector3.UP
+	var spd := _free_cam_speed * (3.0 if Input.is_key_pressed(KEY_SHIFT) else 1.0)
+	if move_dir.length() > 0.01:
+		_free_cam_node.global_position += move_dir.normalized() * spd * delta
+
+# ─────────────────────────────────────────────
 # Process
 # ─────────────────────────────────────────────
 func _process(_delta: float) -> void:
+	# Free camera
+	_process_free_cam(_delta)
+
 	# ── Pass player health to SquadManager ──
 	var sm = get_node_or_null("/root/SquadManager")
 	if sm and max_health > 0:
