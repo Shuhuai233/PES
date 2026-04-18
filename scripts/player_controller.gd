@@ -109,6 +109,7 @@ const QUICK_SLOT_IDS: Array[StringName] = [
 # 枪械网格（运行时程序化构建）
 var gun_pivot: Node3D = null
 var gun_mesh: MeshInstance3D = null
+var _gun_tween: Tween = null  # 当前活跃的枪械 tween（kick/reload/equip）
 
 # 背包 UI 状态
 var inventory_open: bool = false
@@ -877,8 +878,11 @@ func _update_weapon_bob(delta: float) -> void:
 	if gun_pivot == null:
 		return
 
-	# ── ADS 完全就位时，强制锁定位置和旋转，无视一切 bob/tween ──
-	if is_aiming and ads_alpha > 0.98:
+	# ── ADS 完全就位时，强制锁定位置和旋转，杀掉所有枪械 tween ──
+	if is_aiming and ads_alpha > 0.9:
+		if _gun_tween and _gun_tween.is_running():
+			_gun_tween.kill()
+			_gun_tween = null
 		gun_pivot.position = GUN_ADS_POS
 		gun_pivot.rotation_degrees = Vector3.ZERO
 		bob_origin = GUN_ADS_POS
@@ -1030,10 +1034,12 @@ func _handle_jump(delta: float) -> void:
 		jump_buffer_timer = 0.0
 		coyote_timer = 0.0
 		# 跳跃枪械动画
-		if gun_pivot:
-			var tween := create_tween()
-			tween.tween_property(gun_pivot, "position", bob_origin + Vector3(0, -0.02, 0), 0.08)
-			tween.tween_property(gun_pivot, "position", bob_origin, 0.15)
+		if gun_pivot and not is_aiming:
+			if _gun_tween and _gun_tween.is_running():
+				_gun_tween.kill()
+			_gun_tween = create_tween()
+			_gun_tween.tween_property(gun_pivot, "position", bob_origin + Vector3(0, -0.02, 0), 0.08)
+			_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.15)
 
 func _apply_movement(delta: float) -> void:
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
@@ -1119,31 +1125,28 @@ func _try_shoot() -> void:
 func _kick_gun(_unused: bool = false) -> void:
 	if gun_pivot == null:
 		return
-	# ADS 完全就位时跳过 tween（位置由 _update_weapon_bob 强制锁定）
-	if is_aiming and ads_alpha > 0.98:
+	# ADS 时完全跳过视觉 kick（位置由 bob 函数强制锁定）
+	if is_aiming:
 		return
-	var tween := create_tween()
+	if _gun_tween and _gun_tween.is_running():
+		_gun_tween.kill()
+	_gun_tween = create_tween()
 	var kick_pos := bob_origin + Vector3(0, recoil_kick_pos * 0.5, recoil_kick_pos)
 	var rot_v := -recoil_kick_rot
-	var rot_h: float = 0.0
-	if is_aiming:
-		rot_v *= 0.4
-	else:
-		rot_h = randf_range(-1.5, 1.5)
-	tween.tween_property(gun_pivot, "position", kick_pos, 0.04)
-	tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, 0), 0.04)
-	tween.tween_property(gun_pivot, "position", bob_origin, 0.1)
-	tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.1)
-	tween.tween_property(gun_pivot, "position", bob_origin, 0.1)
-	tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.1)
+	var rot_h: float = randf_range(-1.5, 1.5)
+	_gun_tween.tween_property(gun_pivot, "position", kick_pos, 0.04)
+	_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, 0), 0.04)
+	_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.1)
+	_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.1)
 
 func _on_land(strength: float) -> void:
-	if gun_pivot == null:
+	if gun_pivot == null or is_aiming:
 		return
-	# 枪械下压
-	var tween := create_tween()
-	tween.tween_property(gun_pivot, "position", bob_origin + Vector3(0, -strength, 0), 0.06)
-	tween.tween_property(gun_pivot, "position", bob_origin, 0.18)
+	if _gun_tween and _gun_tween.is_running():
+		_gun_tween.kill()
+	_gun_tween = create_tween()
+	_gun_tween.tween_property(gun_pivot, "position", bob_origin + Vector3(0, -strength, 0), 0.06)
+	_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.18)
 	# 镜头略微向下压
 	head.rotation.x = clamp(
 		head.rotation.x + deg_to_rad(strength * landing_impact_speed),
@@ -1156,9 +1159,11 @@ func _start_reload() -> void:
 	reload_timer = reload_time
 	can_shoot = false
 	if gun_pivot:
-		var tween := create_tween()
-		tween.tween_property(gun_pivot, "position", bob_origin + Vector3(0, -0.08, 0), 0.2)
-		tween.tween_property(gun_pivot, "position", bob_origin, 0.2)
+		if _gun_tween and _gun_tween.is_running():
+			_gun_tween.kill()
+		_gun_tween = create_tween()
+		_gun_tween.tween_property(gun_pivot, "position", bob_origin + Vector3(0, -0.08, 0), 0.2)
+		_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.2)
 
 func _finish_reload() -> void:
 	is_reloading = false
@@ -1256,10 +1261,13 @@ func _spawn_tracer(hit_point: Vector3) -> void:
 	tracer.global_position = muzzle_pos
 	tracer.look_at(hit_point, Vector3.UP)
 
-	# 飞行动画：从枪口到命中点
-	var fly_time: float = clampf(dist / 120.0, 0.02, 0.15)  # ~120 m/s 弹速
+	# 飞行动画：从枪口到命中点，到达后残留可见
+	var fly_time: float = clampf(dist / 150.0, 0.02, 0.12)  # ~150 m/s 弹速
 	var tw := tracer.create_tween()
 	tw.tween_property(tracer, "global_position", hit_point, fly_time)
+	# 到达后停留 0.3 秒，然后缩小消失
+	tw.tween_interval(0.3)
+	tw.tween_property(tracer, "scale", Vector3.ZERO, 0.15)
 	tw.tween_callback(tracer.queue_free)
 
 # ─────────────────────────────────────────────
@@ -1308,12 +1316,14 @@ func _play_equip_anim() -> void:
 	if gun_pivot == null:
 		return
 	can_shoot = false
+	if _gun_tween and _gun_tween.is_running():
+		_gun_tween.kill()
 	gun_pivot.position = bob_origin + Vector3(0, -0.25, 0.1)
 	gun_pivot.rotation_degrees = Vector3(30, 0, 0)
-	var tw := create_tween()
-	tw.tween_property(gun_pivot, "position", bob_origin, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	tw.parallel().tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.3).set_ease(Tween.EASE_OUT)
-	tw.tween_callback(func(): can_shoot = true)
+	_gun_tween = create_tween()
+	_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	_gun_tween.parallel().tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.3).set_ease(Tween.EASE_OUT)
+	_gun_tween.tween_callback(func(): can_shoot = true)
 
 # ─────────────────────────────────────────────
 # ADS（瞄准镜）系统
