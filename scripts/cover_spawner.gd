@@ -120,6 +120,7 @@ func _build_pillar(pos: Vector3) -> StaticBody3D:
 		var marker := Node3D.new()
 		marker.name = "CoverPoint"
 		marker.add_to_group("cover_point")
+		marker.set_meta("cover_height", PILLAR_SIZE.y)
 		marker.position = dir * (PILLAR_SIZE.x * 0.5 + 0.4)
 		body.add_child(marker)
 
@@ -189,6 +190,7 @@ func _build_cover(template: Dictionary, pos: Vector3) -> StaticBody3D:
 	var cover_marker := Node3D.new()
 	cover_marker.name = "CoverPoint"
 	cover_marker.add_to_group("cover_point")
+	cover_marker.set_meta("cover_height", size.y)
 	# Position the cover point slightly behind the cover (relative to center)
 	cover_marker.position = Vector3(away_from_center.x * (size.x * 0.5 + 0.4), 0, away_from_center.z * (size.z * 0.5 + 0.4))
 	body.add_child(cover_marker)
@@ -197,6 +199,7 @@ func _build_cover(template: Dictionary, pos: Vector3) -> StaticBody3D:
 	var cover_marker2 := Node3D.new()
 	cover_marker2.name = "CoverPoint2"
 	cover_marker2.add_to_group("cover_point")
+	cover_marker2.set_meta("cover_height", size.y)
 	cover_marker2.position = Vector3(-away_from_center.x * (size.x * 0.5 + 0.4), 0, -away_from_center.z * (size.z * 0.5 + 0.4))
 	body.add_child(cover_marker2)
 

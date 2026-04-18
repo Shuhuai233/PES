@@ -33,7 +33,7 @@ extends CharacterBody3D
 @export var min_cover_time: float = 1.2
 @export var max_cover_time: float = 3.0
 @export var peek_side_offset: float = 0.9
-@export var peek_duration: float = 0.6
+@export var peek_duration: float = 0.45
 @export var advance_range: float = 6.0
 @export var melee_range: float = 2.0
 @export var melee_damage: int = 15
@@ -84,11 +84,13 @@ var _walk_time: float = 0.0
 var _is_crouching_anim: bool = false
 var _crouch_blend: float = 0.0
 var _visual_nodes: Array[Node3D] = []
+var _cover_is_low: bool = false        ## true = half-height cover (pop-up peek)
 const WALK_FREQ: float = 10.0
 const WALK_LEG_AMP: float = 0.45
 const WALK_ARM_AMP: float = 0.3
 const CROUCH_Y: float = -0.35
 const SPAWN_DUR: float = 0.35
+const LOW_COVER_THRESHOLD: float = 1.3 ## covers shorter than this = half-height
 
 @onready var mesh: MeshInstance3D = $MeshInstance3D
 
@@ -292,6 +294,14 @@ func _state_in_cover(delta: float) -> void:
 	velocity.z = move_toward(velocity.z, 0.0, speed * 4.0 * delta)
 	_look_at_player()
 
+	# Determine cover type from metadata
+	_cover_is_low = false
+	if _cover_point and is_instance_valid(_cover_point) and _cover_point.has_meta("cover_height"):
+		_cover_is_low = _cover_point.get_meta("cover_height") < LOW_COVER_THRESHOLD
+
+	# Low cover → crouch behind it; High cover → stand behind it
+	_is_crouching_anim = _cover_is_low
+
 	_cover_timer -= delta
 
 	# Grenade check: if player is stationary behind cover
@@ -319,64 +329,85 @@ func _state_in_cover(delta: float) -> void:
 		_transition(State.PEEK_SHOOT)
 
 # ═════════════════════════════════════════════
-# PEEK_SHOOT — lean out, aim, fire burst
+# PEEK_SHOOT — two modes based on cover height:
+#   Low cover  → pop-up (stand up from crouch, fire, crouch back down)
+#   High cover → side-lean (step sideways to get LOS, fire, step back)
 # ═════════════════════════════════════════════
 func _state_peek_shoot(delta: float) -> void:
 	_look_at_player()
 
-	# Report suppressing to squad
 	var sm = get_node_or_null("/root/SquadManager")
 	if sm:
 		sm.report_suppressing()
 
-	# Lean sideways from cover
-	if _cover_point and is_instance_valid(_cover_point):
-		var target_pos := _cover_point.global_position + _peek_dir * peek_side_offset
-		var dir := _flat_dir_to(target_pos)
-		var dist := _flat_dist_to(target_pos)
-		if dist > 0.2:
-			velocity.x = dir.x * speed * 2.0
-			velocity.z = dir.z * speed * 2.0
-		else:
-			velocity.x = move_toward(velocity.x, 0.0, speed * 4.0 * delta)
-			velocity.z = move_toward(velocity.z, 0.0, speed * 4.0 * delta)
+	if _cover_is_low:
+		# ── POP-UP PEEK: stand up to shoot over low cover ──
+		_is_crouching_anim = false  # stand up (lerp handled by _animate_crouch)
+		# Don't move sideways — just stand in place
+		velocity.x = move_toward(velocity.x, 0.0, speed * 4.0 * delta)
+		velocity.z = move_toward(velocity.z, 0.0, speed * 4.0 * delta)
+	else:
+		# ── SIDE PEEK: step sideways to get line of sight around high cover ──
+		_is_crouching_anim = false
+		if _cover_point and is_instance_valid(_cover_point):
+			var target_pos := _cover_point.global_position + _peek_dir * peek_side_offset
+			var dist := _flat_dist_to(target_pos)
+			if dist > 0.3:
+				var dir := _flat_dir_to(target_pos)
+				velocity.x = dir.x * speed * 1.5
+				velocity.z = dir.z * speed * 1.5
+			else:
+				velocity.x = move_toward(velocity.x, 0.0, speed * 4.0 * delta)
+				velocity.z = move_toward(velocity.z, 0.0, speed * 4.0 * delta)
 
-	# Aim delay
+	# Aim delay (wait for peek animation to finish before firing)
 	_peek_timer -= delta
 	if _peek_timer > 0.0:
 		return
 
-	# Fire burst (accuracy reduced when suppressed)
+	# Fire burst
 	_burst_timer -= delta
 	if _burst_timer <= 0.0 and _burst_remaining > 0:
 		_fire_at_player()
 		_burst_remaining -= 1
 		_burst_timer = burst_interval
 
-	# Burst finished → retreat (Heavy doesn't retreat, keeps shooting)
+	# Burst finished → retreat
 	if _burst_remaining <= 0:
 		if archetype == 2:  # Heavy — reload and shoot again
 			_burst_remaining = burst_count
-			_burst_timer = 0.8  # longer delay between bursts
+			_burst_timer = 0.8
 		else:
 			_transition(State.RETREAT)
 
 # ═════════════════════════════════════════════
-# RETREAT — navigate back behind cover
+# RETREAT — go back behind cover
+#   Low cover  → just crouch back down (no movement needed)
+#   High cover → navigate back behind cover obstacle
 # ═════════════════════════════════════════════
 func _state_retreat(delta: float) -> void:
 	if _cover_point == null or not is_instance_valid(_cover_point):
 		_transition(State.SEEK_COVER)
 		return
 
-	# Use flat distance for arrival check
+	if _cover_is_low:
+		# Low cover retreat = just crouch down, already in position
+		_is_crouching_anim = true
+		velocity.x = move_toward(velocity.x, 0.0, speed * 4.0 * delta)
+		velocity.z = move_toward(velocity.z, 0.0, speed * 4.0 * delta)
+		# Wait for crouch animation to mostly finish, then back to IN_COVER
+		if _crouch_blend > 0.7:
+			_transition(State.IN_COVER)
+		return
+
+	# High cover retreat = walk back behind cover
+	_is_crouching_anim = false
 	var dist_to_cover := _flat_dist_to(_cover_point.global_position)
 	if dist_to_cover < 1.2:
 		_transition(State.IN_COVER)
 		return
 
 	_nav_agent.target_position = _cover_point.global_position
-
 	if not _nav_agent.is_navigation_finished():
 		var next_pos := _nav_agent.get_next_path_position()
 		var dir := (next_pos - global_position)
@@ -719,17 +750,18 @@ func _transition(new_state: State) -> void:
 		State.IN_COVER:
 			var time_mult := 1.5 if archetype == 2 else 1.0
 			_cover_timer = randf_range(min_cover_time, max_cover_time) * time_mult
-			_is_crouching_anim = true
+			# crouch state set in _state_in_cover based on cover height
 		State.PEEK_SHOOT:
 			_peek_timer = peek_duration
 			_burst_remaining = burst_count
 			_burst_timer = 0.0
-			_is_crouching_anim = false
+			# crouch state set in _state_peek_shoot based on cover type
 		State.ADVANCE:
 			_advance_shoot_timer = randf_range(0.3, 0.8)
 			_is_crouching_anim = false
 		State.RETREAT:
-			_is_crouching_anim = true
+			# crouch state set in _state_retreat based on cover type
+			pass
 		State.FLANK:
 			_no_cover_timer = 0.0
 			_is_crouching_anim = false
