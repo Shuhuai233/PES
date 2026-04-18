@@ -138,7 +138,7 @@ var _sniper_charge: float = 0.0     # 0→1
 var _sniper_ring_timer: float = 0.0 # 红框生成间隔计时
 const SNIPER_CHARGE_TIME := 0.8     # 蓄力时间（秒）
 const SNIPER_MIN_CHARGE := 0.3      # 最低可射击蓄力比例
-const SNIPER_RING_INTERVAL := 0.1   # 每 0.1 秒生成一个红框
+const SNIPER_RING_INTERVAL := 0.25  # 每 0.25 秒生成一个红框（减少数量）
 
 # 快速切换武器槽（1-5），-1 表示未选中
 var current_quick_slot: int = -1
@@ -1419,18 +1419,17 @@ func _spawn_charge_ring() -> void:
 
 	gun_pivot.add_child(ring)
 	var start_z: float = -0.90
-	var end_z: float = 0.60
+	var end_z: float = 0.80
 	ring.position = Vector3(0, 0.01, start_z)
 	ring.scale = Vector3.ONE
 
-	# 速度随蓄力由慢到快：蓄力初期慢（0.7s），满蓄力快（0.25s）
-	var travel_time: float = lerpf(0.7, 0.25, _sniper_charge)
+	# 速度随蓄力由慢到快（整体慢 3 倍）：蓄力初期 2.1s，满蓄力 0.75s
+	var travel_time: float = lerpf(2.1, 0.75, _sniper_charge)
 	var tw := ring.create_tween()
 	tw.set_parallel(true)
-	# 移动：EASE_IN 加速（开始慢末尾快）
 	tw.tween_property(ring, "position:z", end_z, travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	# 放大：EASE_IN + EXPO（开始几乎不变，末尾急剧放大）
-	tw.tween_property(ring, "scale", Vector3(3.5, 3.5, 1.0), travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_EXPO)
+	# 放大到 8 倍（指数曲线：前段小，末段爆开）
+	tw.tween_property(ring, "scale", Vector3(8.0, 8.0, 1.0), travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_EXPO)
 	tw.set_parallel(false)
 	tw.tween_callback(ring.queue_free)
 
@@ -1722,15 +1721,27 @@ func _update_ads(delta: float) -> void:
 		and not is_reloading and not inventory_open
 	is_aiming = want_aim
 
-	# 平滑插值 ads_alpha (0→1)
+	# 平滑插值 ads_alpha (0→1)，使用 ease-out 让进入 ADS 更有弹性
 	var target_alpha := 1.0 if is_aiming else 0.0
 	ads_alpha = move_toward(ads_alpha, target_alpha, delta * ads_speed)
 
 	# 插值枪械位置：hip → ADS center
 	if gun_pivot and not _is_tween_active():
 		var target_pos := GUN_HIP_POS.lerp(_gun_ads_pos, ads_alpha)
-		# 只在非 bob 动画时更新 bob_origin，bob 动画会自己处理
 		bob_origin = target_pos
+
+	# ADS 呼吸摇摆（轻微正弦波晃动）
+	if is_aiming and ads_alpha > 0.9 and gun_pivot:
+		var breath_time := Time.get_ticks_msec() * 0.001
+		var sway_x: float = sin(breath_time * 1.2) * 0.002
+		var sway_y: float = sin(breath_time * 0.8 + 0.5) * 0.0015
+		gun_pivot.position.x += sway_x
+		gun_pivot.position.y += sway_y
+
+	# 通知 HUD 更新 ADS 视觉（暗角 + 准心淡出）
+	var ui_node := get_node_or_null("/root/WalkScene/WalkthroughUI")
+	if ui_node and ui_node.has_method("update_ads_visuals"):
+		ui_node.update_ads_visuals(ads_alpha)
 
 	# 狙击镜/DMR ADS 时隐藏整个枪模（用 scope overlay 代替）
 	if _is_sniper():

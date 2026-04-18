@@ -70,6 +70,7 @@ var kill_counter: Label
 var extract_bar_bg: ColorRect
 var extract_bar_fill: ColorRect
 var crosshair: Control
+var ads_vignette: ColorRect  # ADS 暗角
 var stamina_bar_bg: ColorRect
 var stamina_bar_fill: ColorRect
 var fade_panel: ColorRect
@@ -437,6 +438,13 @@ func _build_hud() -> void:
 	add_child(crosshair)
 	_rebuild_crosshair(4.0)
 
+	# ── ADS 暗角（默认透明，ADS 时渐显）──
+	ads_vignette = ColorRect.new()
+	ads_vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ads_vignette.color = Color(0, 0, 0, 0)
+	ads_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(ads_vignette)
+
 	# ── 教程面板 ─────────────────────────────
 	panel_bg = ColorRect.new()
 	panel_bg.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -517,6 +525,15 @@ func _rebuild_crosshair(gap: float) -> void:
 
 func update_crosshair_spread(spread: float) -> void:
 	_rebuild_crosshair(4.0 + spread * 20.0)
+
+## ADS 视觉状态更新（每帧由 player_controller 调用）
+func update_ads_visuals(ads_alpha: float) -> void:
+	# 暗角随 ADS 渐入
+	if ads_vignette:
+		ads_vignette.color.a = ads_alpha * 0.15
+	# 准心随 ADS 淡出（用瞄具代替）
+	if crosshair:
+		crosshair.modulate.a = 1.0 - ads_alpha * 0.8  # ADS 时准心变 20% 透明度
 
 # ─────────────────────────────────────────────
 # 教程显示
