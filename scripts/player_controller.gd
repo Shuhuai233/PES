@@ -376,14 +376,14 @@ func _add_red_dot_sight(rail_y: float) -> void:
 	top_bar.position = Vector3(0, mount_y + 0.058, sight_z)
 	top_bar.set_surface_override_material(0, frame_col)
 	gun_pivot.add_child(top_bar)
-	# 红点（中心发光点，用明亮红色）
+	# 红点（中心发光点，更大更亮）
 	var dot := MeshInstance3D.new()
 	dot.name = "RedDot"
 	var dm := BoxMesh.new()
-	dm.size = Vector3(0.006, 0.006, 0.004)
+	dm.size = Vector3(0.010, 0.010, 0.004)
 	dot.mesh = dm
 	dot.position = Vector3(0, center_y, sight_z)
-	dot.set_surface_override_material(0, _gun_mat(Color(1.0, 0.1, 0.1)))
+	dot.set_surface_override_material(0, _gun_mat(Color(1.0, 0.15, 0.1)))
 	gun_pivot.add_child(dot)
 
 ## 根据武器 ID 程序化构建不同外形的枪
@@ -963,7 +963,7 @@ func _apply_recoil() -> void:
 	_recoil_pending_h += h_kick
 
 func _update_recoil(delta: float) -> void:
-	# ── 第一阶段：平滑施加 pending recoil 到镜头 ──
+	# ── 第一阶段：平滑施加 pending recoil 到镜头（快速上抬）──
 	if _recoil_pending_v > 0.001 or abs(_recoil_pending_h) > 0.001:
 		var apply_v: float = _recoil_pending_v * minf(1.0, delta * recoil_apply_speed)
 		var apply_h: float = _recoil_pending_h * minf(1.0, delta * recoil_apply_speed)
@@ -972,10 +972,11 @@ func _update_recoil(delta: float) -> void:
 		rotate_y(deg_to_rad(apply_h))
 		_recoil_pending_v -= apply_v
 		_recoil_pending_h -= apply_h
-		recoil_current_v = clamp(recoil_current_v + apply_v, 0.0, recoil_max_vertical)
+		recoil_current_v = clampf(recoil_current_v + apply_v, 0.0, recoil_max_vertical)
 		recoil_current_h += apply_h
+		return  # 施加中不恢复，让后坐力先完整抬起
 
-	# ── 第二阶段：缓慢恢复已施加的后坐力 ──
+	# ── 第二阶段：pending 消耗完后缓慢恢复（下拉回原位）──
 	if recoil_current_v > 0.001:
 		var step_v := recoil_current_v * delta * recoil_recovery_speed
 		head.rotation.x += deg_to_rad(step_v)

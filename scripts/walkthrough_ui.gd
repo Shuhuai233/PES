@@ -499,9 +499,13 @@ func _build_hud() -> void:
 func _rebuild_crosshair(gap: float) -> void:
 	for c in crosshair.get_children():
 		c.queue_free()
-	var thick := 2.0
-	var line_len := 7.0
-	var col := Color(1, 1, 1, 0.85)
+	var thick := 3.0
+	var line_len := 12.0
+	var col := Color(1, 1, 1, 0.9)
+	# 中心点
+	var dot := ColorRect.new(); dot.color = col; dot.size = Vector2(3, 3)
+	dot.position = Vector2(-1.5, -1.5); crosshair.add_child(dot)
+	# 四条线
 	var t := ColorRect.new(); t.color = col; t.size = Vector2(thick, line_len)
 	t.position = Vector2(-thick * 0.5, -gap - line_len); crosshair.add_child(t)
 	var b := ColorRect.new(); b.color = col; b.size = Vector2(thick, line_len)
