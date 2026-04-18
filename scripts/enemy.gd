@@ -85,6 +85,7 @@ var _is_crouching_anim: bool = false
 var _crouch_blend: float = 0.0
 var _visual_nodes: Array[Node3D] = []
 var _cover_is_low: bool = false        ## true = half-height cover (pop-up peek)
+var _retreat_timer: float = 0.0        ## safety timeout for retreat
 const WALK_FREQ: float = 10.0
 const WALK_LEG_AMP: float = 0.45
 const WALK_ARM_AMP: float = 0.3
@@ -395,8 +396,9 @@ func _state_retreat(delta: float) -> void:
 		_is_crouching_anim = true
 		velocity.x = move_toward(velocity.x, 0.0, speed * 4.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, speed * 4.0 * delta)
-		# Wait for crouch animation to mostly finish, then back to IN_COVER
-		if _crouch_blend > 0.7:
+		_retreat_timer += delta
+		# Wait for crouch animation to mostly finish, or timeout after 0.5s
+		if _crouch_blend > 0.7 or _retreat_timer > 0.5:
 			_transition(State.IN_COVER)
 		return
 
@@ -441,7 +443,11 @@ func _state_advance(delta: float) -> void:
 	var next_pos := _nav_agent.get_next_path_position()
 	var dir := (next_pos - global_position)
 	dir.y = 0.0
-	dir = dir.normalized()
+	# Fallback: if nav returns zero direction, walk directly toward player
+	if dir.length_squared() < 0.01:
+		dir = _flat_dir_to(_player.global_position)
+	else:
+		dir = dir.normalized()
 
 	# Rushers sprint, others walk
 	var move_speed: float = sprint_speed if archetype == 0 else speed
@@ -761,7 +767,7 @@ func _transition(new_state: State) -> void:
 			_is_crouching_anim = false
 		State.RETREAT:
 			# crouch state set in _state_retreat based on cover type
-			pass
+			_retreat_timer = 0.0
 		State.FLANK:
 			_no_cover_timer = 0.0
 			_is_crouching_anim = false
