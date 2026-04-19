@@ -69,62 +69,72 @@ static func _get_mat(color: Color) -> ShaderMaterial:
 # ─────────────────────────────────────────────
 # Muzzle flash
 # ─────────────────────────────────────────────
-static func spawn_muzzle_flash_fx(flash_pos: Vector3, cam_basis: Basis, scene_root: Node) -> void:
+static func spawn_muzzle_flash_fx(flash_pos: Vector3, cam_basis: Basis, scene_root: Node, gun_pivot: Node3D = null, muzzle_local: Vector3 = Vector3.ZERO) -> void:
 	var forward := cam_basis * Vector3.FORWARD
-	var flash_rot := randf() * 360.0  # 整体随机旋转
+	var flash_rot := randf() * 360.0
 
-	# ── 十字形闪光（2 条交叉长条）──
+	# 如果有 gun_pivot，火焰挂在枪上（跟随抖动）；否则挂在场景根
+	var parent: Node = gun_pivot if gun_pivot else scene_root
+	var use_local: bool = gun_pivot != null
+
+	# ── 十字形闪光（2 条交叉长条，更大）──
 	for j in 2:
-		var bar := _get_pooled("muzzle_bar_%d" % j, scene_root)
-		var bar_len: float = randf_range(0.12, 0.22)
-		var bar_width: float = randf_range(0.03, 0.06)
-		if bar.mesh == null or not bar.mesh is BoxMesh:
-			bar.mesh = BoxMesh.new()
+		var bar := MeshInstance3D.new()
+		var bar_len: float = randf_range(0.18, 0.30)
+		var bar_width: float = randf_range(0.04, 0.08)
+		var bm := BoxMesh.new()
 		if j == 0:
-			(bar.mesh as BoxMesh).size = Vector3(bar_len, bar_width, 0.01)
+			bm.size = Vector3(bar_len, bar_width, 0.015)
 		else:
-			(bar.mesh as BoxMesh).size = Vector3(bar_width, bar_len, 0.01)
+			bm.size = Vector3(bar_width, bar_len, 0.015)
+		bar.mesh = bm
 		bar.set_surface_override_material(0, _get_mat(
 			Color(1.0, randf_range(0.7, 0.95), randf_range(0.1, 0.4))))
-		bar.global_position = flash_pos
-		bar.scale = Vector3.ONE
-		bar.look_at(flash_pos + forward, Vector3.UP)
+		parent.add_child(bar)
+		if use_local:
+			bar.position = muzzle_local
+		else:
+			bar.global_position = flash_pos
+			bar.look_at(flash_pos + forward, Vector3.UP)
 		bar.rotate_object_local(Vector3.FORWARD, deg_to_rad(flash_rot + j * 45.0))
 		var tw := bar.create_tween()
 		tw.tween_property(bar, "scale", Vector3.ZERO, randf_range(0.05, 0.09))
-		tw.tween_callback(_return_to_pool.bind("muzzle_bar_%d" % j, bar))
+		tw.tween_callback(bar.queue_free)
 
-	# ── 白热核心（大方块）──
-	var core := _get_pooled("muzzle_core", scene_root)
-	var core_size: float = randf_range(0.04, 0.08)
-	if core.mesh == null or not core.mesh is BoxMesh:
-		core.mesh = BoxMesh.new()
-	(core.mesh as BoxMesh).size = Vector3(core_size, core_size, core_size * 0.5)
+	# ── 白热核心 ──
+	var core := MeshInstance3D.new()
+	var core_size: float = randf_range(0.06, 0.10)
+	var cm := BoxMesh.new()
+	cm.size = Vector3(core_size, core_size, core_size * 0.5)
+	core.mesh = cm
 	core.set_surface_override_material(0, _get_mat(Color(1.0, 1.0, 0.9)))
-	core.global_position = flash_pos
-	core.scale = Vector3.ONE
-	core.look_at(flash_pos + forward, Vector3.UP)
+	parent.add_child(core)
+	if use_local:
+		core.position = muzzle_local
+	else:
+		core.global_position = flash_pos
+		core.look_at(flash_pos + forward, Vector3.UP)
 	var ctw := core.create_tween()
 	ctw.tween_property(core, "scale", Vector3.ZERO, 0.04)
-	ctw.tween_callback(_return_to_pool.bind("muzzle_core", core))
+	ctw.tween_callback(core.queue_free)
 
-	# ── 额外星形射线（3-5 条随机方向细长条）──
+	# ── 星形射线（3-5 条）──
 	for i in randi_range(3, 5):
 		var ray := MeshInstance3D.new()
 		var rm := BoxMesh.new()
-		var ray_len: float = randf_range(0.06, 0.15)
-		rm.size = Vector3(0.008, 0.008, ray_len)
+		var ray_len: float = randf_range(0.08, 0.18)
+		rm.size = Vector3(0.01, 0.01, ray_len)
 		ray.mesh = rm
 		ray.set_surface_override_material(0, _get_mat(
 			Color(1.0, randf_range(0.5, 0.9), 0.1)))
-		scene_root.add_child(ray)
+		scene_root.add_child(ray)  # 射线挂在场景根（飞出去的）
 		ray.global_position = flash_pos
 		var scatter_dir := cam_basis * Vector3(
 			randf_range(-0.6, 0.6), randf_range(-0.6, 0.6), -1.0).normalized()
 		ray.look_at(flash_pos + scatter_dir, Vector3.UP)
 		var rtw := ray.create_tween()
 		rtw.tween_property(ray, "global_position",
-			flash_pos + scatter_dir * randf_range(0.1, 0.3), 0.08)
+			flash_pos + scatter_dir * randf_range(0.12, 0.35), 0.08)
 		rtw.parallel().tween_property(ray, "scale", Vector3.ZERO, 0.08)
 		rtw.tween_callback(ray.queue_free)
 
@@ -294,24 +304,43 @@ static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_r
 # ─────────────────────────────────────────────
 # Sniper charge ring
 # ─────────────────────────────────────────────
+
+## V99 狙击枪身截面半径查表（Z → 半径）
+## 枪管细，枪体/电池粗，枪托中等
+static func _sniper_profile_radius(z: float) -> float:
+	# Z=-0.96: 枪口发射环 r=0.042
+	# Z=-0.66: 枪管 r=0.03
+	# Z=-0.375: 枪体前端 r=0.07
+	# Z=0.0:   枪体中心/电池 r=0.13
+	# Z=0.50:  枪托 r=0.09
+	if z < -0.66:
+		return lerpf(0.042, 0.03, clampf((z - (-0.96)) / 0.3, 0.0, 1.0))
+	elif z < -0.375:
+		return lerpf(0.03, 0.07, clampf((z - (-0.66)) / 0.285, 0.0, 1.0))
+	elif z < 0.0:
+		return lerpf(0.07, 0.13, clampf((z - (-0.375)) / 0.375, 0.0, 1.0))
+	else:
+		return lerpf(0.13, 0.09, clampf(z / 0.50, 0.0, 1.0))
+
 static func spawn_charge_ring(gun_pivot: Node3D, sniper_charge: float) -> void:
 	if gun_pivot == null:
 		return
-	var ring := Node3D.new()
-	ring.name = "ChargeRing"
-	# 方框初始大小随枪身截面变化——枪口处小，枪体处大
-	# 起始位置 Z=-0.90（枪管，窄），经过 Z=0（枪体，宽），到 Z=0.80（枪托后）
-	# 用起始 Z 对应的截面大小作为初始 ring_size
-	var barrel_radius: float = 0.035 + sniper_charge * 0.01  # 枪管处的框大小
-	var ring_size: float = barrel_radius
+	# 方框间距（比枪身截面大这么多）
+	var clearance: float = 0.025 + sniper_charge * 0.01
+	var start_z: float = -0.90
+	var start_radius: float = _sniper_profile_radius(start_z) + clearance
 	var thickness: float = 0.008
 	var glow_color := Color(1.0, 0.15, 0.1, 0.9)
 	var mat := _get_mat(glow_color)
+
+	# 构建方框（初始大小贴合枪管处截面）
+	var ring := Node3D.new()
+	ring.name = "ChargeRing"
 	for data in [
-		[Vector3(0, ring_size, 0), Vector3(ring_size * 2, thickness, thickness)],
-		[Vector3(0, -ring_size, 0), Vector3(ring_size * 2, thickness, thickness)],
-		[Vector3(-ring_size, 0, 0), Vector3(thickness, ring_size * 2, thickness)],
-		[Vector3(ring_size, 0, 0), Vector3(thickness, ring_size * 2, thickness)],
+		[Vector3(0, start_radius, 0), Vector3(start_radius * 2, thickness, thickness)],
+		[Vector3(0, -start_radius, 0), Vector3(start_radius * 2, thickness, thickness)],
+		[Vector3(-start_radius, 0, 0), Vector3(thickness, start_radius * 2, thickness)],
+		[Vector3(start_radius, 0, 0), Vector3(thickness, start_radius * 2, thickness)],
 	]:
 		var edge := MeshInstance3D.new()
 		var em := BoxMesh.new()
@@ -320,25 +349,25 @@ static func spawn_charge_ring(gun_pivot: Node3D, sniper_charge: float) -> void:
 		edge.position = data[0]
 		edge.set_surface_override_material(0, mat)
 		ring.add_child(edge)
-	# 更大的辉光
+
 	var glow_light := OmniLight3D.new()
 	glow_light.light_color = Color(1.0, 0.2, 0.1)
-	glow_light.light_energy = 1.2 + sniper_charge * 2.0  # 更亮
-	glow_light.omni_range = 0.6  # 更大范围
+	glow_light.light_energy = 1.2 + sniper_charge * 2.0
+	glow_light.omni_range = 0.6
 	ring.add_child(glow_light)
 	gun_pivot.add_child(ring)
-	var start_z: float = -0.90
-	var end_z: float = 0.80
 	ring.position = Vector3(0, 0.01, start_z)
-	ring.scale = Vector3.ONE
+
+	# 动画：Z 移动 + scale 跟随枪身截面变化
+	var end_z: float = 0.80
 	var travel_time: float = lerpf(2.1, 0.75, sniper_charge)
-	# 最终缩放：枪体处截面约为枪管处的 3 倍，再加上原有的放大
-	# 枪管处 ring_size ~0.035，枪体处应该 ~0.10，整体放大到 10x
+	# 计算终点处的枪身半径，算出需要的缩放比
+	var end_radius: float = _sniper_profile_radius(end_z) + clearance * 3.0
+	var scale_ratio: float = end_radius / maxf(start_radius, 0.01)
 	var tw := ring.create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(ring, "position:z", end_z, travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	tw.tween_property(ring, "scale", Vector3(10.0, 10.0, 1.0), travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_EXPO)
-	# 辉光也跟着增大
+	tw.tween_property(ring, "scale", Vector3(scale_ratio, scale_ratio, 1.0), travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
 	tw.tween_property(glow_light, "omni_range", 1.5, travel_time)
 	tw.set_parallel(false)
 	tw.tween_callback(ring.queue_free)

@@ -829,13 +829,15 @@ func _finish_reload() -> void:
 func _flash_muzzle() -> void:
 	if muzzle_flash:
 		muzzle_flash.visible = true
-		# 把 muzzle light 移到实际枪口位置
 		muzzle_flash.position = _get_muzzle_local_pos()
 		await get_tree().create_timer(muzzle_flash_duration).timeout
 		if is_instance_valid(muzzle_flash):
 			muzzle_flash.visible = false
-	# 枪口火焰粒子（可见的闪光）
-	VFX.spawn_muzzle_flash_fx(_get_muzzle_world_pos(), camera.global_basis, get_tree().current_scene)
+	# 枪口火焰：挂在 gun_pivot 上，用枪口在 pivot 本地空间的位置
+	var muzzle_in_pivot := _get_muzzle_pivot_pos()
+	VFX.spawn_muzzle_flash_fx(
+		_get_muzzle_world_pos(), camera.global_basis, get_tree().current_scene,
+		gun_pivot, muzzle_in_pivot)
 
 ## 根据武器类型返回弹道火光残留时间
 func _get_trail_linger() -> float:
@@ -847,11 +849,8 @@ func _get_trail_linger() -> float:
 		&"sniper_disc": return 1.5    # 狙击枪，长残留突出"能量射线"感
 	return 0.3
 
-## 获取枪口在 camera 本地空间的位置
-func _get_muzzle_local_pos() -> Vector3:
-	if gun_pivot == null:
-		return Vector3(0.15, -0.1, -0.5)
-	# 枪管末端在 gun_pivot 空间的 Z 位置（各武器不同）
+## 获取枪口在 gun_pivot 本地空间的位置（固定偏移，不受 pivot 位置影响）
+func _get_muzzle_pivot_pos() -> Vector3:
 	var barrel_z: float = -0.55
 	match _current_weapon_id:
 		&"shotgun_cqc": barrel_z = -0.53
@@ -859,8 +858,13 @@ func _get_muzzle_local_pos() -> Vector3:
 		&"ar_medium": barrel_z = -0.65
 		&"dmr_long": barrel_z = -0.81
 		&"sniper_disc": barrel_z = -0.96
-	# gun_pivot.position 是 camera local，加上枪管 Z
-	return gun_pivot.position + Vector3(0, 0.02, barrel_z)
+	return Vector3(0, 0.02, barrel_z)
+
+## 获取枪口在 camera 本地空间的位置
+func _get_muzzle_local_pos() -> Vector3:
+	if gun_pivot == null:
+		return Vector3(0.15, -0.1, -0.5)
+	return gun_pivot.position + _get_muzzle_pivot_pos()
 
 ## 获取枪口世界坐标
 func _get_muzzle_world_pos() -> Vector3:
