@@ -753,20 +753,20 @@ func _kick_gun() -> void:
 		_gun_tween.kill()
 	_gun_tween = create_tween()
 	if is_aiming:
-		# ADS kick: 微小的后退+旋转
-		var ads_kick := bob_origin + Vector3(0, 0.008, recoil_kick_pos * 0.6)
+		# ADS kick: 主要是向后推（Z 正方向 = 朝玩家）
+		var ads_kick := bob_origin + Vector3(0, 0.006, recoil_kick_pos * 2.0)
 		_gun_tween.tween_property(gun_pivot, "position", ads_kick, 0.03)
 		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(-recoil_kick_rot * 0.4, 0, 0), 0.03)
-		_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.06)
-		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.06)
+		_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.08)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.08)
 	else:
-		# Hip-fire kick: 更强的后退+旋转
-		var kick_z: float = recoil_kick_pos * 1.8  # 明显向后推
-		var kick_pos := bob_origin + Vector3(0, recoil_kick_pos * 0.6, kick_z)
-		var rot_v := -recoil_kick_rot * 1.2
+		# Hip-fire kick: 大幅向后推 + 旋转
+		var kick_z: float = recoil_kick_pos * 4.0  # 非常明显的后退
+		var kick_pos := bob_origin + Vector3(0, recoil_kick_pos * 0.8, kick_z)
+		var rot_v := -recoil_kick_rot * 1.3
 		var rot_h: float = randf_range(-2.5, 2.5)
-		_gun_tween.tween_property(gun_pivot, "position", kick_pos, 0.035)
-		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, randf_range(-1.5, 1.5)), 0.035)
+		_gun_tween.tween_property(gun_pivot, "position", kick_pos, 0.03)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, randf_range(-1.5, 1.5)), 0.03)
 		_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.1)
 		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.1)
 

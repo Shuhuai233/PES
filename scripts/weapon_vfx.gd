@@ -305,22 +305,51 @@ static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_r
 # Sniper charge ring
 # ─────────────────────────────────────────────
 
-## V99 狙击枪身截面半径查表（Z → 半径）
-## 枪管细，枪体/电池粗，枪托中等
+## V99 狙击枪外廓半径查表（Z → 从中心到最外边的距离）
+## 考虑枪管、枪身、电池、瞄具、散热片的所有突出部分
 static func _sniper_profile_radius(z: float) -> float:
-	# Z=-0.96: 枪口发射环 r=0.042
-	# Z=-0.66: 枪管 r=0.03
-	# Z=-0.375: 枪体前端 r=0.07
-	# Z=0.0:   枪体中心/电池 r=0.13
-	# Z=0.50:  枪托 r=0.09
+	# 纵向（Y）外廓：取瞄具顶部和电池底部的最大值
+	# 横向（X）外廓：取枪身宽度和散热片的最大值
+	# 返回两者中较大的作为方框半径
+	var y_top: float  # 最高点（瞄具或枪身）
+	var y_bot: float  # 最低点（电池或枪身）
+	var x_half: float # 半宽（枪身或散热片）
+
 	if z < -0.66:
-		return lerpf(0.042, 0.03, clampf((z - (-0.96)) / 0.3, 0.0, 1.0))
-	elif z < -0.375:
-		return lerpf(0.03, 0.07, clampf((z - (-0.66)) / 0.285, 0.0, 1.0))
+		# 枪管区域：只有枪管圆柱 r=0.03
+		y_top = 0.035
+		y_bot = 0.035
+		x_half = 0.03
+	elif z < -0.26:
+		# 枪体前段 + 散热片区域
+		var t: float = clampf((z - (-0.66)) / 0.40, 0.0, 1.0)
+		y_top = lerpf(0.035, 0.07, t)
+		y_bot = lerpf(0.035, 0.07, t)
+		x_half = lerpf(0.03, 0.065, t)  # 散热片 X=0.06
+		# 瞄具从 Z≈-0.26 开始，这里还没到
 	elif z < 0.0:
-		return lerpf(0.07, 0.13, clampf((z - (-0.375)) / 0.375, 0.0, 1.0))
+		# 瞄具区域（Z=-0.26 到 Z=0.0）：瞄具顶 Y=0.15
+		var t: float = clampf((z - (-0.26)) / 0.26, 0.0, 1.0)
+		y_top = lerpf(0.07, 0.16, t)  # 瞄具顶面 Y=0.15，从中心算 ~0.16
+		y_bot = lerpf(0.07, 0.14, t)  # 电池底部
+		x_half = lerpf(0.065, 0.07, t)  # 电池宽 0.13/2
+	elif z < 0.17:
+		# 电池/枪体后段
+		y_top = 0.16  # 仍在瞄具范围内
+		y_bot = 0.14
+		x_half = 0.07
+	elif z < 0.50:
+		# 枪托区域：瞄具已结束
+		var t: float = clampf((z - 0.17) / 0.33, 0.0, 1.0)
+		y_top = lerpf(0.16, 0.09, t)
+		y_bot = lerpf(0.14, 0.09, t)
+		x_half = lerpf(0.07, 0.05, t)
 	else:
-		return lerpf(0.13, 0.09, clampf(z / 0.50, 0.0, 1.0))
+		y_top = 0.09
+		y_bot = 0.09
+		x_half = 0.05
+
+	return maxf(maxf(y_top, y_bot), x_half)
 
 static func spawn_charge_ring(gun_pivot: Node3D, sniper_charge: float) -> void:
 	if gun_pivot == null:
