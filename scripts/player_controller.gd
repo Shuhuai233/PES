@@ -1193,7 +1193,7 @@ func _draw_debug_ray(start: Vector3, end: Vector3, hit: bool) -> void:
 	_debug_lines.append(line)
 	_debug_lines.append(marker)
 	while _debug_lines.size() > DEBUG_LINE_MAX * 2:
-		var old := _debug_lines.pop_front()
+		var old: Node = _debug_lines.pop_front() as Node
 		if is_instance_valid(old):
 			old.queue_free()
 
