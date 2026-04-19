@@ -1,17 +1,23 @@
-[gd_scene load_steps=24 format=3 uid="uid://walk_scene"]
+[gd_scene format=3 uid="uid://cl5e6n16hrx07"]
 
-[ext_resource type="PackedScene" path="res://assets/washing_machine.glb" id="6_washer"]
-[ext_resource type="Script" path="res://scripts/walk_scene.gd" id="1_walk"]
-[ext_resource type="Script" path="res://scripts/player_controller.gd" id="2_player"]
-[ext_resource type="Script" path="res://scripts/microwave_portal.gd" id="3_portal"]
-[ext_resource type="Script" path="res://scripts/enemy_spawner.gd" id="4_spawner"]
-[ext_resource type="Script" path="res://scripts/walkthrough_ui.gd" id="5_ui"]
+[ext_resource type="Script" uid="uid://drqhd2tpvdygk" path="res://scripts/walk_scene.gd" id="1_walk"]
+[ext_resource type="PackedScene" path="res://prefabs/cover/Barrier.tscn" id="2_hi074"]
+[ext_resource type="Script" uid="uid://ko3uv3spt8pd" path="res://scripts/player_controller.gd" id="2_player"]
+[ext_resource type="Script" uid="uid://dgpnlt0bfqmty" path="res://scripts/microwave_portal.gd" id="3_portal"]
+[ext_resource type="Script" uid="uid://bhtofwghfdp37" path="res://scripts/enemy_spawner.gd" id="4_spawner"]
+[ext_resource type="Script" uid="uid://g2upia8rem4t" path="res://scripts/walkthrough_ui.gd" id="5_ui"]
+[ext_resource type="PackedScene" uid="uid://c27xq5yqwnicq" path="res://assets/washing_machine.glb" id="6_washer"]
+[ext_resource type="PackedScene" path="res://prefabs/cover/Crate.tscn" id="8_onigh"]
+[ext_resource type="PackedScene" path="res://prefabs/cover/Desk.tscn" id="9_fx32b"]
+[ext_resource type="PackedScene" path="res://prefabs/cover/Pillar.tscn" id="10_f1diu"]
+[ext_resource type="PackedScene" path="res://prefabs/cover/WallSegmentLarge.tscn" id="11_wf55l"]
+[ext_resource type="PackedScene" path="res://prefabs/cover/CrateSmall.tscn" id="12_xhr7y"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.28, 0.24, 0.12, 1)
-sky_horizon_color = Color(0.35, 0.30, 0.15, 1)
-ground_bottom_color = Color(0.20, 0.18, 0.08, 1)
-ground_horizon_color = Color(0.25, 0.22, 0.10, 1)
+sky_horizon_color = Color(0.35, 0.3, 0.15, 1)
+ground_bottom_color = Color(0.2, 0.18, 0.08, 1)
+ground_horizon_color = Color(0.25, 0.22, 0.1, 1)
 
 [sub_resource type="Sky" id="sky_1"]
 sky_material = SubResource("sky_mat")
@@ -20,48 +26,39 @@ sky_material = SubResource("sky_mat")
 background_mode = 2
 sky = SubResource("sky_1")
 ambient_light_source = 3
-ambient_light_color = Color(0.55, 0.50, 0.30, 1)
+ambient_light_color = Color(0.55, 0.5, 0.3, 1)
 ambient_light_energy = 0.6
 fog_enabled = true
-fog_light_color = Color(0.35, 0.30, 0.15, 1)
+fog_light_color = Color(0.35, 0.3, 0.15, 1)
 fog_density = 0.025
-glow_enabled = false
-ssao_enabled = false
-ssil_enabled = false
-ssr_enabled = false
 adjustment_enabled = true
 adjustment_contrast = 1.15
 adjustment_saturation = 0.5
 
-; ---- FLOOR (80x80) ----
 [sub_resource type="BoxMesh" id="floor_mesh"]
 size = Vector3(80, 0.4, 80)
 
 [sub_resource type="StandardMaterial3D" id="floor_mat"]
-albedo_color = Color(0.35, 0.32, 0.20, 1)
+albedo_color = Color(0.35, 0.32, 0.2, 1)
 roughness = 0.95
 
 [sub_resource type="BoxShape3D" id="floor_shape"]
 size = Vector3(80, 0.4, 80)
 
-; ---- CEILING (80x80, low 3.2m) ----
 [sub_resource type="BoxMesh" id="ceiling_mesh"]
 size = Vector3(80, 0.3, 80)
 
 [sub_resource type="StandardMaterial3D" id="ceiling_mat"]
-albedo_color = Color(0.45, 0.42, 0.30, 1)
-roughness = 1.0
+albedo_color = Color(0.45, 0.42, 0.3, 1)
 
 [sub_resource type="BoxShape3D" id="ceiling_shape"]
 size = Vector3(80, 0.3, 80)
 
-; ---- WALLS (80 wide, 3.2 tall) ----
 [sub_resource type="BoxMesh" id="wall_mesh"]
 size = Vector3(80, 3.2, 0.4)
 
 [sub_resource type="StandardMaterial3D" id="wall_mat"]
-albedo_color = Color(0.50, 0.45, 0.28, 1)
-roughness = 1.0
+albedo_color = Color(0.5, 0.45, 0.28, 1)
 
 [sub_resource type="BoxShape3D" id="wall_shape"]
 size = Vector3(80, 3.2, 0.4)
@@ -70,298 +67,294 @@ size = Vector3(80, 3.2, 0.4)
 radius = 0.4
 height = 1.8
 
-[sub_resource type="SphereShape3D" id="portal_area_shape"]
-radius = 1.8
-
 [sub_resource type="BoxMesh" id="microwave_body_mesh"]
-size = Vector3(1.0, 0.75, 0.75)
+size = Vector3(1, 0.75, 0.75)
 
 [sub_resource type="StandardMaterial3D" id="microwave_mat"]
 albedo_color = Color(0.7, 0.7, 0.65, 1)
-roughness = 0.4
 metallic = 0.5
+roughness = 0.4
 
 [sub_resource type="BoxMesh" id="microwave_door_mesh"]
 size = Vector3(0.85, 0.6, 0.06)
 
 [sub_resource type="StandardMaterial3D" id="microwave_door_mat"]
 albedo_color = Color(0.05, 0.05, 0.05, 1)
-roughness = 0.3
 metallic = 0.4
+roughness = 0.3
 
-; ---- ROOT ----
-[node name="WalkScene" type="Node3D"]
+[sub_resource type="SphereShape3D" id="portal_area_shape"]
+radius = 1.8
+
+[node name="WalkScene" type="Node3D" unique_id=424704254]
 script = ExtResource("1_walk")
 
-; ---- ENVIRONMENT ----
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="Barrier" parent="." unique_id=1526319590 instance=ExtResource("2_hi074")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.9245996, 1.6391277e-07, -18.736645)
+metadata/_edit_group_ = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1190645667]
 environment = SubResource("env_1")
 
-; Dim directional light — backrooms are mostly lit by fluorescents
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1051239695]
 transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 10, 0)
-light_color = Color(0.85, 0.78, 0.50, 1)
+light_color = Color(0.85, 0.78, 0.5, 1)
 light_energy = 0.4
 shadow_enabled = true
 
-; ---- FLOOR ----
-[node name="Floor" type="StaticBody3D" parent="."]
+[node name="Floor" type="StaticBody3D" parent="." unique_id=3286286]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, 0)
-collision_layer = 1
 collision_mask = 0
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor" unique_id=1927934042]
 mesh = SubResource("floor_mesh")
 surface_material_override/0 = SubResource("floor_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor" unique_id=538320520]
 shape = SubResource("floor_shape")
 
-; ---- CEILING (low, oppressive) ----
-[node name="Ceiling" type="StaticBody3D" parent="."]
+[node name="Ceiling" type="StaticBody3D" parent="." unique_id=967184423]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.35, 0)
-collision_layer = 1
+visible = false
 collision_mask = 0
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Ceiling"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Ceiling" unique_id=1970321779]
 mesh = SubResource("ceiling_mesh")
 surface_material_override/0 = SubResource("ceiling_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Ceiling"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ceiling" unique_id=666980324]
 shape = SubResource("ceiling_shape")
 
-; ---- WALLS (80 wide, 3.2 tall) ----
-[node name="WallNorth" type="StaticBody3D" parent="."]
+[node name="WallNorth" type="StaticBody3D" parent="." unique_id=2014640053]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, -40)
-collision_layer = 1
 collision_mask = 0
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="WallNorth"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallNorth" unique_id=1059787366]
 mesh = SubResource("wall_mesh")
 surface_material_override/0 = SubResource("wall_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="WallNorth"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallNorth" unique_id=1592900679]
 shape = SubResource("wall_shape")
 
-[node name="WallSouth" type="StaticBody3D" parent="."]
+[node name="WallSouth" type="StaticBody3D" parent="." unique_id=1420245463]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 40)
-collision_layer = 1
 collision_mask = 0
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="WallSouth"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallSouth" unique_id=775177628]
 mesh = SubResource("wall_mesh")
 surface_material_override/0 = SubResource("wall_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="WallSouth"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallSouth" unique_id=1641133166]
 shape = SubResource("wall_shape")
 
-[node name="WallEast" type="StaticBody3D" parent="."]
+[node name="WallEast" type="StaticBody3D" parent="." unique_id=1410427898]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 40, 1.6, 0)
-collision_layer = 1
 collision_mask = 0
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="WallEast"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallEast" unique_id=1612916145]
 mesh = SubResource("wall_mesh")
 surface_material_override/0 = SubResource("wall_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="WallEast"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallEast" unique_id=348360859]
 shape = SubResource("wall_shape")
 
-[node name="WallWest" type="StaticBody3D" parent="."]
+[node name="WallWest" type="StaticBody3D" parent="." unique_id=194974157]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -40, 1.6, 0)
-collision_layer = 1
 collision_mask = 0
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="WallWest"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallWest" unique_id=304792630]
 mesh = SubResource("wall_mesh")
 surface_material_override/0 = SubResource("wall_mat")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="WallWest"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallWest" unique_id=605902766]
 shape = SubResource("wall_shape")
 
-; ---- FLUORESCENT CEILING LIGHTS (backrooms grid) ----
-[node name="FluorescentLights" type="Node3D" parent="."]
+[node name="FluorescentLights" type="Node3D" parent="." unique_id=1906191506]
 
-[node name="Light_C" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_C" type="OmniLight3D" parent="FluorescentLights" unique_id=1485399826]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.9, 0)
-light_color = Color(0.95, 0.92, 0.70, 1)
+light_color = Color(0.95, 0.92, 0.7, 1)
 light_energy = 2.5
 omni_range = 14.0
-shadow_enabled = false
 
-[node name="Light_N" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_N" type="OmniLight3D" parent="FluorescentLights" unique_id=682754114]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.9, -18)
-light_color = Color(0.95, 0.92, 0.70, 1)
+light_color = Color(0.95, 0.92, 0.7, 1)
 light_energy = 2.2
 omni_range = 14.0
-shadow_enabled = false
 
-[node name="Light_S" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_S" type="OmniLight3D" parent="FluorescentLights" unique_id=1488918547]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.9, 18)
-light_color = Color(0.95, 0.92, 0.70, 1)
+light_color = Color(0.95, 0.92, 0.7, 1)
 light_energy = 2.2
 omni_range = 14.0
-shadow_enabled = false
 
-[node name="Light_E" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_E" type="OmniLight3D" parent="FluorescentLights" unique_id=2047293787]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 2.9, 0)
-light_color = Color(0.95, 0.92, 0.70, 1)
+light_color = Color(0.95, 0.92, 0.7, 1)
 light_energy = 2.2
 omni_range = 14.0
-shadow_enabled = false
 
-[node name="Light_W" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_W" type="OmniLight3D" parent="FluorescentLights" unique_id=1809914951]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 2.9, 0)
-light_color = Color(0.95, 0.92, 0.70, 1)
+light_color = Color(0.95, 0.92, 0.7, 1)
 light_energy = 2.2
 omni_range = 14.0
-shadow_enabled = false
 
-[node name="Light_NE" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_NE" type="OmniLight3D" parent="FluorescentLights" unique_id=915341406]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 2.9, -18)
 light_color = Color(0.92, 0.88, 0.65, 1)
 light_energy = 1.8
 omni_range = 14.0
-shadow_enabled = false
 
-[node name="Light_NW" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_NW" type="OmniLight3D" parent="FluorescentLights" unique_id=1907260157]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 2.9, -18)
 light_color = Color(0.92, 0.88, 0.65, 1)
 light_energy = 1.8
 omni_range = 14.0
-shadow_enabled = false
 
-[node name="Light_SE" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_SE" type="OmniLight3D" parent="FluorescentLights" unique_id=701769829]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 2.9, 18)
 light_color = Color(0.92, 0.88, 0.65, 1)
 light_energy = 1.8
 omni_range = 14.0
-shadow_enabled = false
 
-[node name="Light_SW" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_SW" type="OmniLight3D" parent="FluorescentLights" unique_id=59317389]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 2.9, 18)
 light_color = Color(0.92, 0.88, 0.65, 1)
 light_energy = 1.8
 omni_range = 14.0
-shadow_enabled = false
 
-; Far corner lights
-[node name="Light_FarN" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_FarN" type="OmniLight3D" parent="FluorescentLights" unique_id=292538755]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.9, -32)
-light_color = Color(0.90, 0.85, 0.60, 1)
+light_color = Color(0.9, 0.85, 0.6, 1)
 light_energy = 1.5
 omni_range = 12.0
-shadow_enabled = false
 
-[node name="Light_FarS" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_FarS" type="OmniLight3D" parent="FluorescentLights" unique_id=1464886582]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.9, 32)
-light_color = Color(0.90, 0.85, 0.60, 1)
+light_color = Color(0.9, 0.85, 0.6, 1)
 light_energy = 1.5
 omni_range = 12.0
-shadow_enabled = false
 
-[node name="Light_FarE" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_FarE" type="OmniLight3D" parent="FluorescentLights" unique_id=1948055469]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 2.9, 0)
-light_color = Color(0.90, 0.85, 0.60, 1)
+light_color = Color(0.9, 0.85, 0.6, 1)
 light_energy = 1.5
 omni_range = 12.0
-shadow_enabled = false
 
-[node name="Light_FarW" type="OmniLight3D" parent="FluorescentLights"]
+[node name="Light_FarW" type="OmniLight3D" parent="FluorescentLights" unique_id=684025935]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 2.9, 0)
-light_color = Color(0.90, 0.85, 0.60, 1)
+light_color = Color(0.9, 0.85, 0.6, 1)
 light_energy = 1.5
 omni_range = 12.0
-shadow_enabled = false
 
-; ---- PLAYER ----
-[node name="Player" type="CharacterBody3D" parent="."]
+[node name="Player" type="CharacterBody3D" parent="." unique_id=410502126]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
-script = ExtResource("2_player")
 collision_layer = 2
-collision_mask = 1
+script = ExtResource("2_player")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player" unique_id=140542745]
 shape = SubResource("player_shape")
 
-[node name="Head" type="Node3D" parent="Player"]
+[node name="Head" type="Node3D" parent="Player" unique_id=1601136040]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
 
-[node name="Camera3D" type="Camera3D" parent="Player/Head"]
-fov = 75.0
+[node name="Camera3D" type="Camera3D" parent="Player/Head" unique_id=444481499]
 far = 100.0
 
-[node name="RayCast3D" type="RayCast3D" parent="Player/Head/Camera3D"]
-enabled = true
+[node name="RayCast3D" type="RayCast3D" parent="Player/Head/Camera3D" unique_id=616376756]
 target_position = Vector3(0, 0, -30)
 collision_mask = 4
 
-[node name="MuzzleFlash" type="OmniLight3D" parent="Player/Head/Camera3D"]
+[node name="MuzzleFlash" type="OmniLight3D" parent="Player/Head/Camera3D" unique_id=567714971]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.32, -0.25, -0.9)
 visible = false
 light_color = Color(1, 0.8, 0.3, 1)
 light_energy = 10.0
 omni_range = 4.0
 
-; ---- MICROWAVE PORTAL ----
-; Area3D: layer 8, mask 2 (detects player on layer 2)
-[node name="MicrowavePortal" type="Area3D" parent="."]
+[node name="MicrowavePortal" type="Area3D" parent="." unique_id=700458493]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -14)
-script = ExtResource("3_portal")
 collision_layer = 8
 collision_mask = 2
-monitoring = true
 monitorable = false
+script = ExtResource("3_portal")
 
-; Microwave body mesh
-[node name="MeshInstance3D" type="MeshInstance3D" parent="MicrowavePortal"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="MicrowavePortal" unique_id=1271675906]
 mesh = SubResource("microwave_body_mesh")
 surface_material_override/0 = SubResource("microwave_mat")
 
-; Microwave door (dark glass face)
-[node name="DoorMesh" type="MeshInstance3D" parent="MicrowavePortal"]
+[node name="DoorMesh" type="MeshInstance3D" parent="MicrowavePortal" unique_id=1553922286]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.4)
 mesh = SubResource("microwave_door_mesh")
 surface_material_override/0 = SubResource("microwave_door_mat")
 
-; Detection sphere (larger than mesh so player triggers it when close)
-[node name="CollisionShape3D" type="CollisionShape3D" parent="MicrowavePortal"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="MicrowavePortal" unique_id=414831469]
 shape = SubResource("portal_area_shape")
 
-[node name="OmniLight3D" type="OmniLight3D" parent="MicrowavePortal"]
+[node name="OmniLight3D" type="OmniLight3D" parent="MicrowavePortal" unique_id=148960078]
 light_color = Color(0, 0.8, 1, 1)
 light_energy = 3.0
 omni_range = 6.0
 
-[node name="Label3D" type="Label3D" parent="MicrowavePortal"]
+[node name="Label3D" type="Label3D" parent="MicrowavePortal" unique_id=1461372774]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
-text = "MICROWAVE\n[Hold E]"
-font_size = 48
-modulate = Color(0, 0.9, 1, 1)
 billboard = 1
+modulate = Color(0, 0.9, 1, 1)
+text = "MICROWAVE
+[Hold E]"
+font_size = 48
 
-; ---- ENEMY SPAWNER ----
-[node name="EnemySpawner" type="Node3D" parent="."]
+[node name="EnemySpawner" type="Node3D" parent="." unique_id=159655503]
 script = ExtResource("4_spawner")
 
-; ---- PSX POST-PROCESS OVERLAY ----
-; Runs at native resolution — purely aesthetic, no resolution lock
-[node name="PSXPostProcess" type="CanvasLayer" parent="."]
+[node name="PSXPostProcess" type="CanvasLayer" parent="." unique_id=30042584]
 layer = -1
 
-[node name="PSXOverlay" type="ColorRect" parent="PSXPostProcess"]
+[node name="PSXOverlay" type="ColorRect" parent="PSXPostProcess" unique_id=97697817]
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-; ---- WALKTHROUGH UI ----
-[node name="WalkthroughUI" type="CanvasLayer" parent="."]
+[node name="WalkthroughUI" type="CanvasLayer" parent="." unique_id=1946454391]
 script = ExtResource("5_ui")
 
-; ---- WASHING MACHINE ----
-[node name="WashingMachine" type="Node3D" parent="."]
+[node name="WashingMachine" type="Node3D" parent="." unique_id=1471557022]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, -10)
 
-[node name="WashingMachineModel" type="Node3D" parent="WashingMachine" instance=ExtResource("6_washer")]
+[node name="WashingMachineModel" parent="WashingMachine" unique_id=1890305424 instance=ExtResource("6_washer")]
+
+[node name="Crate" parent="." unique_id=26337742 instance=ExtResource("8_onigh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0012181997, 0.0040269345, -18.860985)
+
+[node name="Desk" parent="." unique_id=757236113 instance=ExtResource("9_fx32b")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4099643, 1.6391277e-07, -18.674023)
+metadata/_edit_group_ = true
+
+[node name="Pillar" parent="." unique_id=1110983628 instance=ExtResource("10_f1diu")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.210747, 4.4703484e-08, -13.396193)
+
+[node name="Pillar2" parent="." unique_id=1524875479 instance=ExtResource("10_f1diu")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.0540667, 2.8312206e-07, -8.311844)
+
+[node name="Pillar3" parent="." unique_id=1489346154 instance=ExtResource("10_f1diu")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.955618, 4.4703484e-08, -1.9571242)
+
+[node name="WallSegmentLarge" parent="." unique_id=1551583479 instance=ExtResource("11_wf55l")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -10.688351, 0.010126039, -12.126421)
+
+[node name="WallSegmentLarge2" parent="." unique_id=1664436500 instance=ExtResource("11_wf55l")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -11, 0, -1)
+
+[node name="CrateSmall" parent="." unique_id=312780490 instance=ExtResource("12_xhr7y")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 2)
+
+[node name="Crate2" parent="." unique_id=2056943803 instance=ExtResource("8_onigh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, 1.7975273)
+
+[node name="Barrier2" parent="." unique_id=1790685814 instance=ExtResource("2_hi074")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.34344518, 0.010218665, 2.1196942)
