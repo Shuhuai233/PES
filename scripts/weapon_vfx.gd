@@ -70,51 +70,63 @@ static func _get_mat(color: Color) -> ShaderMaterial:
 # Muzzle flash
 # ─────────────────────────────────────────────
 static func spawn_muzzle_flash_fx(flash_pos: Vector3, cam_basis: Basis, scene_root: Node) -> void:
-	# 闪光主体
-	var flash := _get_pooled("muzzle_flash", scene_root)
-	var flash_size := randf_range(0.08, 0.15)
-	if flash.mesh == null or not flash.mesh is BoxMesh:
-		flash.mesh = BoxMesh.new()
-	(flash.mesh as BoxMesh).size = Vector3(flash_size, flash_size, flash_size * 2.0)
-	flash.set_surface_override_material(0, _get_mat(Color(1.0, 0.8, 0.2)))
-	flash.global_position = flash_pos
-	flash.look_at(flash_pos + cam_basis * Vector3.FORWARD, Vector3.UP)
-	flash.rotation_degrees.z = randf() * 360
-	flash.scale = Vector3.ONE
-	var tw := flash.create_tween()
-	tw.tween_property(flash, "scale", Vector3.ZERO, 0.07)
-	tw.tween_callback(_return_to_pool.bind("muzzle_flash", flash))
+	var forward := cam_basis * Vector3.FORWARD
+	var flash_rot := randf() * 360.0  # 整体随机旋转
 
-	# 白色核心
+	# ── 十字形闪光（2 条交叉长条）──
+	for j in 2:
+		var bar := _get_pooled("muzzle_bar_%d" % j, scene_root)
+		var bar_len: float = randf_range(0.12, 0.22)
+		var bar_width: float = randf_range(0.03, 0.06)
+		if bar.mesh == null or not bar.mesh is BoxMesh:
+			bar.mesh = BoxMesh.new()
+		if j == 0:
+			(bar.mesh as BoxMesh).size = Vector3(bar_len, bar_width, 0.01)
+		else:
+			(bar.mesh as BoxMesh).size = Vector3(bar_width, bar_len, 0.01)
+		bar.set_surface_override_material(0, _get_mat(
+			Color(1.0, randf_range(0.7, 0.95), randf_range(0.1, 0.4))))
+		bar.global_position = flash_pos
+		bar.scale = Vector3.ONE
+		bar.look_at(flash_pos + forward, Vector3.UP)
+		bar.rotate_object_local(Vector3.FORWARD, deg_to_rad(flash_rot + j * 45.0))
+		var tw := bar.create_tween()
+		tw.tween_property(bar, "scale", Vector3.ZERO, randf_range(0.05, 0.09))
+		tw.tween_callback(_return_to_pool.bind("muzzle_bar_%d" % j, bar))
+
+	# ── 白热核心（大方块）──
 	var core := _get_pooled("muzzle_core", scene_root)
-	var core_size := flash_size * 0.6
+	var core_size: float = randf_range(0.04, 0.08)
 	if core.mesh == null or not core.mesh is BoxMesh:
 		core.mesh = BoxMesh.new()
-	(core.mesh as BoxMesh).size = Vector3(core_size, core_size, core_size)
+	(core.mesh as BoxMesh).size = Vector3(core_size, core_size, core_size * 0.5)
 	core.set_surface_override_material(0, _get_mat(Color(1.0, 1.0, 0.9)))
 	core.global_position = flash_pos
 	core.scale = Vector3.ONE
+	core.look_at(flash_pos + forward, Vector3.UP)
 	var ctw := core.create_tween()
-	ctw.tween_property(core, "scale", Vector3.ZERO, 0.05)
+	ctw.tween_property(core, "scale", Vector3.ZERO, 0.04)
 	ctw.tween_callback(_return_to_pool.bind("muzzle_core", core))
 
-	# 火花粒子
+	# ── 额外星形射线（3-5 条随机方向细长条）──
 	for i in randi_range(3, 5):
-		var spark := _get_pooled("spark", scene_root)
-		if spark.mesh == null or not spark.mesh is BoxMesh:
-			spark.mesh = BoxMesh.new()
-		(spark.mesh as BoxMesh).size = Vector3(0.012, 0.012, 0.04)
-		spark.set_surface_override_material(0, _get_mat(
+		var ray := MeshInstance3D.new()
+		var rm := BoxMesh.new()
+		var ray_len: float = randf_range(0.06, 0.15)
+		rm.size = Vector3(0.008, 0.008, ray_len)
+		ray.mesh = rm
+		ray.set_surface_override_material(0, _get_mat(
 			Color(1.0, randf_range(0.5, 0.9), 0.1)))
-		spark.global_position = flash_pos
-		spark.scale = Vector3.ONE
-		var spark_dir := cam_basis * Vector3(
-			randf_range(-0.5, 0.5), randf_range(-0.3, 0.5), -1.0).normalized()
-		var stw := spark.create_tween()
-		stw.tween_property(spark, "global_position",
-			flash_pos + spark_dir * randf_range(0.15, 0.4), 0.1)
-		stw.tween_property(spark, "scale", Vector3.ZERO, 0.06)
-		stw.tween_callback(_return_to_pool.bind("spark", spark))
+		scene_root.add_child(ray)
+		ray.global_position = flash_pos
+		var scatter_dir := cam_basis * Vector3(
+			randf_range(-0.6, 0.6), randf_range(-0.6, 0.6), -1.0).normalized()
+		ray.look_at(flash_pos + scatter_dir, Vector3.UP)
+		var rtw := ray.create_tween()
+		rtw.tween_property(ray, "global_position",
+			flash_pos + scatter_dir * randf_range(0.1, 0.3), 0.08)
+		rtw.parallel().tween_property(ray, "scale", Vector3.ZERO, 0.08)
+		rtw.tween_callback(ray.queue_free)
 
 # ─────────────────────────────────────────────
 # Shell ejection
@@ -287,8 +299,12 @@ static func spawn_charge_ring(gun_pivot: Node3D, sniper_charge: float) -> void:
 		return
 	var ring := Node3D.new()
 	ring.name = "ChargeRing"
-	var ring_size: float = 0.04 + sniper_charge * 0.02
-	var thickness: float = 0.006
+	# 方框初始大小随枪身截面变化——枪口处小，枪体处大
+	# 起始位置 Z=-0.90（枪管，窄），经过 Z=0（枪体，宽），到 Z=0.80（枪托后）
+	# 用起始 Z 对应的截面大小作为初始 ring_size
+	var barrel_radius: float = 0.035 + sniper_charge * 0.01  # 枪管处的框大小
+	var ring_size: float = barrel_radius
+	var thickness: float = 0.008
 	var glow_color := Color(1.0, 0.15, 0.1, 0.9)
 	var mat := _get_mat(glow_color)
 	for data in [
@@ -304,10 +320,11 @@ static func spawn_charge_ring(gun_pivot: Node3D, sniper_charge: float) -> void:
 		edge.position = data[0]
 		edge.set_surface_override_material(0, mat)
 		ring.add_child(edge)
+	# 更大的辉光
 	var glow_light := OmniLight3D.new()
 	glow_light.light_color = Color(1.0, 0.2, 0.1)
-	glow_light.light_energy = 0.6 + sniper_charge * 1.0
-	glow_light.omni_range = 0.3
+	glow_light.light_energy = 1.2 + sniper_charge * 2.0  # 更亮
+	glow_light.omni_range = 0.6  # 更大范围
 	ring.add_child(glow_light)
 	gun_pivot.add_child(ring)
 	var start_z: float = -0.90
@@ -315,9 +332,13 @@ static func spawn_charge_ring(gun_pivot: Node3D, sniper_charge: float) -> void:
 	ring.position = Vector3(0, 0.01, start_z)
 	ring.scale = Vector3.ONE
 	var travel_time: float = lerpf(2.1, 0.75, sniper_charge)
+	# 最终缩放：枪体处截面约为枪管处的 3 倍，再加上原有的放大
+	# 枪管处 ring_size ~0.035，枪体处应该 ~0.10，整体放大到 10x
 	var tw := ring.create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(ring, "position:z", end_z, travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	tw.tween_property(ring, "scale", Vector3(8.0, 8.0, 1.0), travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_EXPO)
+	tw.tween_property(ring, "scale", Vector3(10.0, 10.0, 1.0), travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_EXPO)
+	# 辉光也跟着增大
+	tw.tween_property(glow_light, "omni_range", 1.5, travel_time)
 	tw.set_parallel(false)
 	tw.tween_callback(ring.queue_free)

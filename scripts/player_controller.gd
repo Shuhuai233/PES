@@ -753,21 +753,22 @@ func _kick_gun() -> void:
 		_gun_tween.kill()
 	_gun_tween = create_tween()
 	if is_aiming:
-		# ADS kick: 只做微小的后退+旋转（位置由 bob 函数在下一帧恢复）
-		var ads_kick := bob_origin + Vector3(0, 0.005, recoil_kick_pos * 0.4)
+		# ADS kick: 微小的后退+旋转
+		var ads_kick := bob_origin + Vector3(0, 0.008, recoil_kick_pos * 0.6)
 		_gun_tween.tween_property(gun_pivot, "position", ads_kick, 0.03)
-		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(-recoil_kick_rot * 0.3, 0, 0), 0.03)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(-recoil_kick_rot * 0.4, 0, 0), 0.03)
 		_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.06)
 		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.06)
 	else:
-		# Hip-fire kick: 完整的后退+旋转+水平偏移
-		var kick_pos := bob_origin + Vector3(0, recoil_kick_pos * 0.5, recoil_kick_pos)
-		var rot_v := -recoil_kick_rot
-		var rot_h: float = randf_range(-2.0, 2.0)
-		_gun_tween.tween_property(gun_pivot, "position", kick_pos, 0.04)
-		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, randf_range(-1.0, 1.0)), 0.04)
-		_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.12)
-		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.12)
+		# Hip-fire kick: 更强的后退+旋转
+		var kick_z: float = recoil_kick_pos * 1.8  # 明显向后推
+		var kick_pos := bob_origin + Vector3(0, recoil_kick_pos * 0.6, kick_z)
+		var rot_v := -recoil_kick_rot * 1.2
+		var rot_h: float = randf_range(-2.5, 2.5)
+		_gun_tween.tween_property(gun_pivot, "position", kick_pos, 0.035)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, randf_range(-1.5, 1.5)), 0.035)
+		_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.1)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.1)
 
 ## 射击时镜头微震（不同于后坐力上抬，这是随机抖动增加"冲击感"）
 func _apply_shoot_shake() -> void:
