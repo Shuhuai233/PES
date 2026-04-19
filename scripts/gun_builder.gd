@@ -93,112 +93,141 @@ static func _add_arms(gun_pivot: Node3D, left_pos: Vector3, right_pos: Vector3) 
 static func _add_iron_sights(gun_pivot: Node3D, front_z: float, rear_z: float, rail_y: float) -> void:
 	var sight_mat := gun_mat(Color(0.06, 0.06, 0.06))
 	var dot_mat := gun_mat(Color(1.0, 0.3, 0.1))
-	var sight_top: float = 0.135
+	var sight_top: float = 0.16  # 更高的瞄具
 
-	# ── 前准星 ──
-	var fs_height: float = sight_top - rail_y + 0.02
+	# ── 前准星（更大更粗）──
+	var fs_height: float = sight_top - rail_y + 0.025
 	var fs_base := MeshInstance3D.new()
 	fs_base.name = "FrontSight"
 	var fsm := BoxMesh.new()
-	fsm.size = Vector3(0.014, fs_height, 0.010)
+	fsm.size = Vector3(0.02, fs_height, 0.014)
 	fs_base.mesh = fsm
 	fs_base.position = Vector3(0, rail_y + fs_height * 0.5 + 0.005, front_z)
 	fs_base.set_surface_override_material(0, sight_mat)
-	fs_base.sorting_offset = 0.1  # 渲染在枪身之上
+	fs_base.sorting_offset = 0.1
 	gun_pivot.add_child(fs_base)
-	# 荧光准星点
+	# 前准星护翼（左右保护翼，让前准星更宽大）
+	for side in [-1.0, 1.0]:
+		var wing := MeshInstance3D.new()
+		var wm := BoxMesh.new()
+		wm.size = Vector3(0.006, fs_height * 0.7, 0.016)
+		wing.mesh = wm
+		wing.position = Vector3(0.018 * side, rail_y + fs_height * 0.35 + 0.005, front_z)
+		wing.set_surface_override_material(0, sight_mat)
+		wing.sorting_offset = 0.1
+		gun_pivot.add_child(wing)
+	# 荧光准星点（小但非常亮）
 	var dot := MeshInstance3D.new()
 	dot.name = "FrontDot"
 	var dm := BoxMesh.new()
-	dm.size = Vector3(0.008, 0.008, 0.008)
+	dm.size = Vector3(0.006, 0.006, 0.006)
 	dot.mesh = dm
-	dot.position = Vector3(0, sight_top + 0.008, front_z)
+	dot.position = Vector3(0, sight_top + 0.01, front_z)
 	dot.set_surface_override_material(0, dot_mat)
 	dot.sorting_offset = 0.2
 	gun_pivot.add_child(dot)
 
-	# ── 后照门 ──
-	var rs_height: float = sight_top - rail_y + 0.02
+	# ── 后照门（更大的环形框架）──
+	var rs_height: float = sight_top - rail_y + 0.025
+	var aperture_half: float = 0.022  # 缺口半宽
+	# 左柱
 	var rs_l := MeshInstance3D.new()
 	rs_l.name = "RearSightL"
 	var rlm := BoxMesh.new()
-	rlm.size = Vector3(0.008, rs_height, 0.010)
+	rlm.size = Vector3(0.012, rs_height, 0.014)
 	rs_l.mesh = rlm
-	rs_l.position = Vector3(-0.016, rail_y + rs_height * 0.5 + 0.005, rear_z)
+	rs_l.position = Vector3(-aperture_half - 0.006, rail_y + rs_height * 0.5 + 0.005, rear_z)
 	rs_l.set_surface_override_material(0, sight_mat)
 	rs_l.sorting_offset = 0.1
 	gun_pivot.add_child(rs_l)
+	# 右柱
 	var rs_r := MeshInstance3D.new()
 	rs_r.name = "RearSightR"
 	var rrm := BoxMesh.new()
-	rrm.size = Vector3(0.008, rs_height, 0.010)
+	rrm.size = Vector3(0.012, rs_height, 0.014)
 	rs_r.mesh = rrm
-	rs_r.position = Vector3(0.016, rail_y + rs_height * 0.5 + 0.005, rear_z)
+	rs_r.position = Vector3(aperture_half + 0.006, rail_y + rs_height * 0.5 + 0.005, rear_z)
 	rs_r.set_surface_override_material(0, sight_mat)
 	rs_r.sorting_offset = 0.1
 	gun_pivot.add_child(rs_r)
+	# 顶部横梁
+	var rs_top := MeshInstance3D.new()
+	rs_top.name = "RearSightTop"
+	var rtm := BoxMesh.new()
+	rtm.size = Vector3(aperture_half * 2 + 0.024, 0.008, 0.014)
+	rs_top.mesh = rtm
+	rs_top.position = Vector3(0, rail_y + rs_height + 0.005, rear_z)
+	rs_top.set_surface_override_material(0, sight_mat)
+	rs_top.sorting_offset = 0.1
+	gun_pivot.add_child(rs_top)
+	# 底部横杠
 	var rs_bar := MeshInstance3D.new()
 	rs_bar.name = "RearSightBar"
 	var rbm := BoxMesh.new()
-	rbm.size = Vector3(0.040, 0.008, 0.010)
+	rbm.size = Vector3(aperture_half * 2 + 0.024, 0.008, 0.014)
 	rs_bar.mesh = rbm
 	rs_bar.position = Vector3(0, rail_y + 0.009, rear_z)
 	rs_bar.set_surface_override_material(0, sight_mat)
 	rs_bar.sorting_offset = 0.1
 	gun_pivot.add_child(rs_bar)
 
-## 红点/全息瞄具（AR 用）
+## 红点/全息瞄具（AR 用）— Marathon 风格：大外框 + 小亮点
 static func _add_red_dot_sight(gun_pivot: Node3D, rail_y: float) -> void:
-	var frame_col := gun_mat(Color(0.08, 0.08, 0.08))
+	var frame_col := gun_mat(Color(0.06, 0.06, 0.06))
 	var mount_y: float = rail_y + 0.005
-	var center_y: float = mount_y + 0.035
 	var sight_z: float = -0.12
-	# 底座
+	# 外框尺寸（比之前大 2 倍以上）
+	var frame_w: float = 0.07   # 左右总宽
+	var frame_h: float = 0.09   # 上下总高
+	var bar_thick: float = 0.008
+	var center_y: float = mount_y + frame_h * 0.5
+
+	# 底座（安装导轨）
 	var base := MeshInstance3D.new()
 	base.name = "RDSBase"
 	var basem := BoxMesh.new()
-	basem.size = Vector3(0.045, 0.012, 0.06)
+	basem.size = Vector3(frame_w, 0.014, 0.07)
 	base.mesh = basem
 	base.position = Vector3(0, mount_y, sight_z)
 	base.set_surface_override_material(0, frame_col)
 	base.sorting_offset = 0.1
 	gun_pivot.add_child(base)
-	# 左支柱
+	# 左柱
 	var l_post := MeshInstance3D.new()
 	var lpm := BoxMesh.new()
-	lpm.size = Vector3(0.006, 0.05, 0.04)
+	lpm.size = Vector3(bar_thick, frame_h, 0.05)
 	l_post.mesh = lpm
-	l_post.position = Vector3(-0.020, mount_y + 0.03, sight_z)
+	l_post.position = Vector3(-frame_w * 0.5 + bar_thick * 0.5, center_y, sight_z)
 	l_post.set_surface_override_material(0, frame_col)
 	l_post.sorting_offset = 0.1
 	gun_pivot.add_child(l_post)
-	# 右支柱
+	# 右柱
 	var r_post := MeshInstance3D.new()
 	var rpm := BoxMesh.new()
-	rpm.size = Vector3(0.006, 0.05, 0.04)
+	rpm.size = Vector3(bar_thick, frame_h, 0.05)
 	r_post.mesh = rpm
-	r_post.position = Vector3(0.020, mount_y + 0.03, sight_z)
+	r_post.position = Vector3(frame_w * 0.5 - bar_thick * 0.5, center_y, sight_z)
 	r_post.set_surface_override_material(0, frame_col)
 	r_post.sorting_offset = 0.1
 	gun_pivot.add_child(r_post)
 	# 顶部横梁
 	var top_bar := MeshInstance3D.new()
 	var tbm := BoxMesh.new()
-	tbm.size = Vector3(0.046, 0.006, 0.04)
+	tbm.size = Vector3(frame_w, bar_thick, 0.05)
 	top_bar.mesh = tbm
-	top_bar.position = Vector3(0, mount_y + 0.058, sight_z)
+	top_bar.position = Vector3(0, mount_y + frame_h, sight_z)
 	top_bar.set_surface_override_material(0, frame_col)
 	top_bar.sorting_offset = 0.1
 	gun_pivot.add_child(top_bar)
-	# 红点
+	# 红点准星（小而非常亮）
 	var dot := MeshInstance3D.new()
 	dot.name = "RedDot"
 	var dm := BoxMesh.new()
-	dm.size = Vector3(0.010, 0.010, 0.004)
+	dm.size = Vector3(0.006, 0.006, 0.003)
 	dot.mesh = dm
 	dot.position = Vector3(0, center_y, sight_z)
-	dot.set_surface_override_material(0, gun_mat(Color(1.0, 0.15, 0.1)))
-	dot.sorting_offset = 0.2
+	dot.set_surface_override_material(0, gun_mat(Color(1.0, 0.1, 0.05)))
+	dot.sorting_offset = 0.3
 	gun_pivot.add_child(dot)
 
 # ─────────────────────────────────────────────

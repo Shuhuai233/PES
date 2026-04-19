@@ -314,22 +314,21 @@ static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_r
 static func spawn_charge_ring(gun_pivot: Node3D, sniper_charge: float) -> void:
 	if gun_pivot == null:
 		return
-	# 方框大小 = 枪身最宽处（瞄具顶部 0.154 from center=0.01）+ 固定间距
-	# 保证方框在任何位置都不会穿入枪身任何部件
-	var max_profile: float = 0.16  # 瞄具区域从 Y=0.01 到 Y=0.154
-	var clearance: float = 0.03 + sniper_charge * 0.015
-	var ring_size: float = max_profile + clearance
+	# 起始大小贴合枪口处枪管（r≈0.04），终止大小包住瞄具（r≈0.19）
+	var start_size: float = 0.05 + sniper_charge * 0.01  # 枪管处
+	var end_size: float = 0.20 + sniper_charge * 0.02    # 瞄具处需要的间距
 	var thickness: float = 0.008
 	var glow_color := Color(1.0, 0.15, 0.1, 0.9)
 	var mat := _get_mat(glow_color)
 
+	# 用起始大小构建方框
 	var ring := Node3D.new()
 	ring.name = "ChargeRing"
 	for data in [
-		[Vector3(0, ring_size, 0), Vector3(ring_size * 2, thickness, thickness)],
-		[Vector3(0, -ring_size, 0), Vector3(ring_size * 2, thickness, thickness)],
-		[Vector3(-ring_size, 0, 0), Vector3(thickness, ring_size * 2, thickness)],
-		[Vector3(ring_size, 0, 0), Vector3(thickness, ring_size * 2, thickness)],
+		[Vector3(0, start_size, 0), Vector3(start_size * 2, thickness, thickness)],
+		[Vector3(0, -start_size, 0), Vector3(start_size * 2, thickness, thickness)],
+		[Vector3(-start_size, 0, 0), Vector3(thickness, start_size * 2, thickness)],
+		[Vector3(start_size, 0, 0), Vector3(thickness, start_size * 2, thickness)],
 	]:
 		var edge := MeshInstance3D.new()
 		var em := BoxMesh.new()
@@ -342,7 +341,7 @@ static func spawn_charge_ring(gun_pivot: Node3D, sniper_charge: float) -> void:
 	var glow_light := OmniLight3D.new()
 	glow_light.light_color = Color(1.0, 0.2, 0.1)
 	glow_light.light_energy = 1.2 + sniper_charge * 2.0
-	glow_light.omni_range = 0.6
+	glow_light.omni_range = 0.4
 	ring.add_child(glow_light)
 	gun_pivot.add_child(ring)
 
@@ -351,11 +350,12 @@ static func spawn_charge_ring(gun_pivot: Node3D, sniper_charge: float) -> void:
 	ring.position = Vector3(0, 0.01, start_z)
 
 	var travel_time: float = lerpf(2.1, 0.75, sniper_charge)
+	# 缩放比：从 start_size 放大到 end_size
+	var scale_ratio: float = end_size / maxf(start_size, 0.01)
 	var tw := ring.create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(ring, "position:z", end_z, travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	# 微小放大（1x → 1.8x），方框始终比枪身大，不会穿模
-	tw.tween_property(ring, "scale", Vector3(1.8, 1.8, 1.0), travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(ring, "scale", Vector3(scale_ratio, scale_ratio, 1.0), travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
 	tw.tween_property(glow_light, "omni_range", 1.5, travel_time)
 	tw.set_parallel(false)
 	tw.tween_callback(ring.queue_free)

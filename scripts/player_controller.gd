@@ -917,11 +917,11 @@ func equip_weapon(item: Resource) -> void:
 	equipped_weapon_name = item.display_name
 	_current_weapon_id = item.id
 	# 根据武器瞄具高度计算 ADS 位置（瞄具中心对齐屏幕中心 Y=0）
-	var ads_y: float = -0.135  # 默认（铁瞄）
+	var ads_y: float = -0.17  # 默认（铁瞄，sight_top=0.16 + dot 0.01）
 	match _current_weapon_id:
-		&"shotgun_cqc": ads_y = -0.143
-		&"smg_short": ads_y = -0.143
-		&"ar_medium": ads_y = -0.12   # 红点瞄具较矮
+		&"shotgun_cqc": ads_y = -0.17
+		&"smg_short": ads_y = -0.17
+		&"ar_medium": ads_y = -0.13   # 红点中心（rail 0.08 + frame_h/2 0.045）
 		&"dmr_long": ads_y = -0.11    # 光学瞄准镜中心
 		&"sniper_disc": ads_y = -0.115
 	_gun_ads_pos = Vector3(GUN_ADS_X, ads_y, GUN_ADS_Z)
