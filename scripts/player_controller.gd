@@ -281,8 +281,9 @@ func _input(event: InputEvent) -> void:
 			_equip_quick_slot(i)
 			break
 	# F4: 弹道 Debug 开关
-	if event is InputEventKey and event.pressed and event.keycode == KEY_F4:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F4:
 		_ballistic_debug = not _ballistic_debug
+		print("[BALLISTIC DEBUG] %s" % ("ON" if _ballistic_debug else "OFF"))
 		if not _ballistic_debug:
 			_clear_debug_lines()
 
@@ -687,26 +688,12 @@ func _fire_single_ray(dmg: int, spread: float) -> void:
 		raycast.force_raycast_update()
 
 	var hit_point: Vector3
-	if raycast and raycast.is_colliding():
+	var did_hit: bool = raycast != null and raycast.is_colliding()
+	if did_hit:
 		hit_point = raycast.get_collision_point()
 		var hit_normal := raycast.get_collision_normal()
-		# ── DEBUG: 打印准心/瞄具/击中点位置 ──
-		if _ballistic_debug:
-			var cam_aim := camera.global_position + camera.global_basis * Vector3(0, 0, -10)
-			var sight_world := Vector3.ZERO
-			if gun_pivot:
-				var rds: Node = gun_pivot.find_child("RedDot", false, false)
-				if rds:
-					sight_world = rds.global_position
-				var fd: Node = gun_pivot.find_child("FrontDot", false, false)
-				if fd and sight_world == Vector3.ZERO:
-					sight_world = fd.global_position
-			var cam_to_hit: float = (cam_aim - hit_point).length()
-			var sight_to_hit: float = (sight_world - hit_point).length() if sight_world != Vector3.ZERO else -1.0
-			print("[BALLISTIC] cam_aim=%.3v  sight=%.3v  hit=%.3v  cam→hit=%.3f  sight→hit=%.3f  spread=%.4f  ADS=%.2f" % [cam_aim, sight_world, hit_point, cam_to_hit, sight_to_hit, spread, ads_alpha])
 		var collider := raycast.get_collider()
 		if collider and collider.is_in_group("enemies"):
-			# 爆头：命中点 Y > 敌人脚底 + 1.3（缩小到头部 top 20%）
 			var is_headshot: bool = hit_point.y > collider.global_position.y + 1.3
 			var final_damage: int = dmg * (3 if is_headshot else 1)
 			enemy_hit.emit(collider)
@@ -715,14 +702,12 @@ func _fire_single_ray(dmg: int, spread: float) -> void:
 			if collider.has_method("take_damage"):
 				collider.take_damage(final_damage)
 			VFX.spawn_hit_particles(hit_point, hit_normal, get_tree().current_scene)
-			# DMR 连击计数
 			if _current_weapon_id == &"dmr_long":
 				_dmr_streak = mini(_dmr_streak + 1, DMR_MAX_STREAK)
 				_dmr_streak_timer = DMR_STREAK_TIMEOUT
 		else:
 			VFX.spawn_bullet_hole(hit_point, hit_normal, get_tree().current_scene)
 			VFX.spawn_impact_debris(hit_point, hit_normal, get_tree().current_scene)
-			# DMR 未命中敌人重置连击
 			if _current_weapon_id == &"dmr_long":
 				_dmr_streak = 0
 	else:
@@ -731,12 +716,29 @@ func _fire_single_ray(dmg: int, spread: float) -> void:
 			_dmr_streak = 0
 
 	VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger())
+	var ray_start := camera.global_position if camera else global_position
+	_draw_debug_ray(ray_start, hit_point, did_hit)
+
+	# ── DEBUG PRINT ──
+	if _ballistic_debug and camera:
+		var cam_aim := camera.global_position + camera.global_basis * Vector3(0, 0, -10)
+		var sight_world := Vector3.ZERO
+		if gun_pivot:
+			var rds: Node = gun_pivot.find_child("RedDot", false, false)
+			if rds:
+				sight_world = rds.global_position
+			else:
+				var fd: Node = gun_pivot.find_child("FrontDot", false, false)
+				if fd:
+					sight_world = fd.global_position
+		print("[BALLISTIC] hit=%s cam_aim=%.2v sight=%.2v hit_pos=%.2v spread=%.4f ADS=%.2f" % [
+			did_hit, cam_aim, sight_world, hit_point, spread, ads_alpha])
 
 ## 散弹枪 — 8 发弹丸扇形散射
 func _fire_shotgun_pellets() -> void:
 	var pellet_count := 8
-	var pellet_spread: float = 0.06  # 每发弹丸的基础散射
-	var pellet_dmg: int = int(float(damage_per_shot) / 3.0)  # 每颗弹丸伤害（总命中 ~2.5x 单发）
+	var pellet_spread: float = 0.06
+	var pellet_dmg: int = int(float(damage_per_shot) / 3.0)
 	for i in pellet_count:
 		if raycast:
 			raycast.target_position = Vector3(
@@ -745,14 +747,15 @@ func _fire_shotgun_pellets() -> void:
 				-raycast_range)
 			raycast.force_raycast_update()
 		var hit_point: Vector3
-		if raycast and raycast.is_colliding():
+		var did_hit: bool = raycast != null and raycast.is_colliding()
+		if did_hit:
 			hit_point = raycast.get_collision_point()
 			var hit_normal := raycast.get_collision_normal()
 			var collider := raycast.get_collider()
 			if collider and collider.is_in_group("enemies"):
 				var is_headshot: bool = hit_point.y > collider.global_position.y + 1.3
 				var final_damage: int = pellet_dmg * (3 if is_headshot else 1)
-				if i == 0:  # 只发一次信号
+				if i == 0:
 					enemy_hit.emit(collider)
 					if is_headshot:
 						headshot_hit.emit(collider)
@@ -761,7 +764,7 @@ func _fire_shotgun_pellets() -> void:
 				if i == 0:
 					VFX.spawn_hit_particles(hit_point, hit_normal, get_tree().current_scene)
 			else:
-				if i < 3:  # 只生成前 3 个弹孔避免性能问题
+				if i < 3:
 					VFX.spawn_bullet_hole(hit_point, hit_normal, get_tree().current_scene)
 				if i == 0:
 					VFX.spawn_impact_debris(hit_point, hit_normal, get_tree().current_scene)
@@ -770,7 +773,7 @@ func _fire_shotgun_pellets() -> void:
 		if i == 0:
 			VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger())
 			var ray_start := camera.global_position if camera else global_position
-			_draw_debug_ray(ray_start, hit_point, raycast != null and raycast.is_colliding())
+			_draw_debug_ray(ray_start, hit_point, did_hit)
 
 # ─────────────────────────────────────────────
 # 枪械动画
