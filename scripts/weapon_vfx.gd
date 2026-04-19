@@ -69,27 +69,35 @@ static func _get_mat(color: Color) -> ShaderMaterial:
 # ─────────────────────────────────────────────
 # Muzzle flash
 # ─────────────────────────────────────────────
-static func spawn_muzzle_flash_fx(flash_pos: Vector3, cam_basis: Basis, scene_root: Node, gun_pivot: Node3D = null, muzzle_local: Vector3 = Vector3.ZERO) -> void:
+static func spawn_muzzle_flash_fx(flash_pos: Vector3, cam_basis: Basis, scene_root: Node, gun_pivot: Node3D = null, muzzle_local: Vector3 = Vector3.ZERO, weapon_id: StringName = &"") -> void:
 	var forward := cam_basis * Vector3.FORWARD
 	var flash_rot := randf() * 360.0
 
-	# 如果有 gun_pivot，火焰挂在枪上（跟随抖动）；否则挂在场景根
 	var parent: Node = gun_pivot if gun_pivot else scene_root
 	var use_local: bool = gun_pivot != null
 
-	# ── 十字形闪光（2 条交叉长条，更大）──
+	# 武器级别的枪焰大小倍率
+	var size_mult: float = 1.0
+	match weapon_id:
+		&"shotgun_cqc": size_mult = 2.5   # 散弹枪巨大枪焰
+		&"smg_short": size_mult = 0.8
+		&"ar_medium": size_mult = 1.0
+		&"dmr_long": size_mult = 1.5
+		&"sniper_disc": size_mult = 3.0   # 狙击枪能量爆发
+
+	# ── 十字形闪光 ──
 	for j in 2:
 		var bar := MeshInstance3D.new()
-		var bar_len: float = randf_range(0.18, 0.30)
-		var bar_width: float = randf_range(0.04, 0.08)
+		var bar_len: float = randf_range(0.25, 0.45) * size_mult
+		var bar_width: float = randf_range(0.06, 0.12) * size_mult
 		var bm := BoxMesh.new()
 		if j == 0:
-			bm.size = Vector3(bar_len, bar_width, 0.015)
+			bm.size = Vector3(bar_len, bar_width, 0.02)
 		else:
-			bm.size = Vector3(bar_width, bar_len, 0.015)
+			bm.size = Vector3(bar_width, bar_len, 0.02)
 		bar.mesh = bm
 		bar.set_surface_override_material(0, _get_mat(
-			Color(1.0, randf_range(0.7, 0.95), randf_range(0.1, 0.4))))
+			Color(1.0, randf_range(0.65, 0.95), randf_range(0.05, 0.35))))
 		parent.add_child(bar)
 		if use_local:
 			bar.position = muzzle_local
@@ -98,12 +106,12 @@ static func spawn_muzzle_flash_fx(flash_pos: Vector3, cam_basis: Basis, scene_ro
 			bar.look_at(flash_pos + forward, Vector3.UP)
 		bar.rotate_object_local(Vector3.FORWARD, deg_to_rad(flash_rot + j * 45.0))
 		var tw := bar.create_tween()
-		tw.tween_property(bar, "scale", Vector3.ZERO, randf_range(0.05, 0.09))
+		tw.tween_property(bar, "scale", Vector3.ZERO, randf_range(0.06, 0.10))
 		tw.tween_callback(bar.queue_free)
 
 	# ── 白热核心 ──
 	var core := MeshInstance3D.new()
-	var core_size: float = randf_range(0.06, 0.10)
+	var core_size: float = randf_range(0.08, 0.14) * size_mult
 	var cm := BoxMesh.new()
 	cm.size = Vector3(core_size, core_size, core_size * 0.5)
 	core.mesh = cm
@@ -115,27 +123,28 @@ static func spawn_muzzle_flash_fx(flash_pos: Vector3, cam_basis: Basis, scene_ro
 		core.global_position = flash_pos
 		core.look_at(flash_pos + forward, Vector3.UP)
 	var ctw := core.create_tween()
-	ctw.tween_property(core, "scale", Vector3.ZERO, 0.04)
+	ctw.tween_property(core, "scale", Vector3.ZERO, 0.05)
 	ctw.tween_callback(core.queue_free)
 
-	# ── 星形射线（3-5 条）──
-	for i in randi_range(3, 5):
+	# ── 星形射线 ──
+	var ray_count: int = randi_range(4, 7)
+	for i in ray_count:
 		var ray := MeshInstance3D.new()
 		var rm := BoxMesh.new()
-		var ray_len: float = randf_range(0.08, 0.18)
-		rm.size = Vector3(0.01, 0.01, ray_len)
+		var ray_len: float = randf_range(0.10, 0.25) * size_mult
+		rm.size = Vector3(0.015, 0.015, ray_len)
 		ray.mesh = rm
 		ray.set_surface_override_material(0, _get_mat(
-			Color(1.0, randf_range(0.5, 0.9), 0.1)))
-		scene_root.add_child(ray)  # 射线挂在场景根（飞出去的）
+			Color(1.0, randf_range(0.4, 0.9), 0.1)))
+		scene_root.add_child(ray)
 		ray.global_position = flash_pos
 		var scatter_dir := cam_basis * Vector3(
-			randf_range(-0.6, 0.6), randf_range(-0.6, 0.6), -1.0).normalized()
+			randf_range(-0.7, 0.7), randf_range(-0.7, 0.7), -1.0).normalized()
 		ray.look_at(flash_pos + scatter_dir, Vector3.UP)
 		var rtw := ray.create_tween()
 		rtw.tween_property(ray, "global_position",
-			flash_pos + scatter_dir * randf_range(0.12, 0.35), 0.08)
-		rtw.parallel().tween_property(ray, "scale", Vector3.ZERO, 0.08)
+			flash_pos + scatter_dir * randf_range(0.15, 0.4) * size_mult, 0.09)
+		rtw.parallel().tween_property(ray, "scale", Vector3.ZERO, 0.09)
 		rtw.tween_callback(ray.queue_free)
 
 # ─────────────────────────────────────────────
@@ -258,17 +267,36 @@ static func spawn_impact_debris(hit_pos: Vector3, hit_normal: Vector3, scene_roo
 # ─────────────────────────────────────────────
 # Tracer
 # ─────────────────────────────────────────────
-static func spawn_tracer(muzzle_pos: Vector3, hit_point: Vector3, scene_root: Node, linger: float = 0.3) -> void:
+static func spawn_tracer(muzzle_pos: Vector3, hit_point: Vector3, scene_root: Node, linger: float = 0.3, weapon_id: StringName = &"") -> void:
 	var dir := (hit_point - muzzle_pos)
 	var dist := dir.length()
 	if dist < 0.5:
 		return
+	# 武器弹道外观
+	var tracer_width: float = 0.015
+	var tracer_color := Color(1.0, 0.9, 0.4)
+	match weapon_id:
+		&"shotgun_cqc":
+			tracer_width = 0.03
+			tracer_color = Color(1.0, 0.6, 0.2)  # 粗橙色
+		&"smg_short":
+			tracer_width = 0.01
+			tracer_color = Color(1.0, 0.9, 0.4)  # 细黄色
+		&"ar_medium":
+			tracer_width = 0.012
+			tracer_color = Color(1.0, 0.85, 0.3)
+		&"dmr_long":
+			tracer_width = 0.02
+			tracer_color = Color(1.0, 1.0, 0.8)  # 粗亮白
+		&"sniper_disc":
+			tracer_width = 0.035
+			tracer_color = Color(0.4, 0.7, 1.0)  # 粗蓝色能量束
 	var tracer := _get_pooled("tracer", scene_root)
-	var tracer_len: float = minf(dist, 2.0)
+	var tracer_len: float = minf(dist, 3.0)
 	if tracer.mesh == null or not tracer.mesh is BoxMesh:
 		tracer.mesh = BoxMesh.new()
-	(tracer.mesh as BoxMesh).size = Vector3(0.01, 0.01, tracer_len)
-	tracer.set_surface_override_material(0, _get_mat(Color(1.0, 0.9, 0.4)))
+	(tracer.mesh as BoxMesh).size = Vector3(tracer_width, tracer_width, tracer_len)
+	tracer.set_surface_override_material(0, _get_mat(tracer_color))
 	tracer.global_position = muzzle_pos
 	tracer.scale = Vector3.ONE
 	tracer.look_at(hit_point, Vector3.UP)
@@ -276,25 +304,37 @@ static func spawn_tracer(muzzle_pos: Vector3, hit_point: Vector3, scene_root: No
 	var tw := tracer.create_tween()
 	tw.tween_property(tracer, "global_position", hit_point, fly_time)
 	tw.tween_interval(linger)
-	tw.tween_property(tracer, "scale", Vector3.ZERO, 0.15)
+	tw.tween_property(tracer, "scale", Vector3.ZERO, 0.2)
 	tw.tween_callback(_return_to_pool.bind("tracer", tracer))
-	# ── 火光残留：沿弹道路径生成发光粒子 ──
-	_spawn_fire_trail(muzzle_pos, hit_point, dist, scene_root, linger)
+	_spawn_fire_trail(muzzle_pos, hit_point, dist, scene_root, linger, weapon_id)
 
 ## 弹道火光残留（沿路径生成逐渐消失的橙色光点）
-static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_root: Node, linger: float = 0.3) -> void:
+static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_root: Node, linger: float = 0.3, weapon_id: StringName = &"") -> void:
 	var trail_count: int = clampi(int(dist * 5.0), 30, 100)
 	var _direction := (end - start).normalized()
+	# 武器粒子外观
+	var particle_size: float = 0.025
+	var base_color := Color(1.0, 0.6, 0.1)
+	match weapon_id:
+		&"shotgun_cqc":
+			particle_size = 0.04
+			base_color = Color(1.0, 0.5, 0.1)
+		&"dmr_long":
+			particle_size = 0.035
+			base_color = Color(1.0, 0.9, 0.6)
+		&"sniper_disc":
+			particle_size = 0.045
+			base_color = Color(0.3, 0.6, 1.0)  # 蓝色 Volt 能量
 	for i in trail_count:
 		var t: float = float(i + 1) / float(trail_count + 1)
 		var pos := start.lerp(end, t)
 		var particle := MeshInstance3D.new()
 		var pm := BoxMesh.new()
-		var s: float = randf_range(0.015, 0.03)
+		var s: float = randf_range(particle_size * 0.7, particle_size * 1.3)
 		pm.size = Vector3(s, s, s)
 		particle.mesh = pm
-		particle.set_surface_override_material(0, _get_mat(
-			Color(1.0, randf_range(0.4, 0.7), 0.1, 0.8)))
+		var col := Color(base_color.r, base_color.g * randf_range(0.7, 1.0), base_color.b, 0.85)
+		particle.set_surface_override_material(0, _get_mat(col))
 		scene_root.add_child(particle)
 		particle.global_position = pos + Vector3(
 			randf_range(-0.02, 0.02), randf_range(-0.02, 0.02), randf_range(-0.02, 0.02))

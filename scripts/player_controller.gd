@@ -715,7 +715,7 @@ func _fire_single_ray(dmg: int, spread: float) -> void:
 		if _current_weapon_id == &"dmr_long":
 			_dmr_streak = 0
 
-	VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger())
+	VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger(), _current_weapon_id)
 	var ray_start := camera.global_position if camera else global_position
 	_draw_debug_ray(ray_start, hit_point, did_hit)
 
@@ -778,7 +778,7 @@ func _fire_shotgun_pellets() -> void:
 		else:
 			hit_point = camera.global_position + camera.global_basis * raycast.target_position
 		if i == 0:
-			VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger())
+	VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger(), _current_weapon_id)
 			var ray_start := camera.global_position if camera else global_position
 			_draw_debug_ray(ray_start, hit_point, did_hit)
 
@@ -877,7 +877,7 @@ func _flash_muzzle() -> void:
 		var muzzle_in_pivot := _get_muzzle_pivot_pos()
 		VFX.spawn_muzzle_flash_fx(
 			_get_muzzle_world_pos(), camera.global_basis, get_tree().current_scene,
-			gun_pivot, muzzle_in_pivot)
+			gun_pivot, muzzle_in_pivot, _current_weapon_id)
 
 ## 根据武器类型返回弹道火光残留时间
 func _get_trail_linger() -> float:
