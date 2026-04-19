@@ -754,7 +754,15 @@ func _fire_shotgun_pellets() -> void:
 		else:
 			hit_point = camera.global_position + camera.global_basis * raycast.target_position
 		if i == 0:
-			VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger())
+	VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger())
+
+	# ── Debug: 准心/瞄具/实际命中位置 ──
+	if _ballistic_debug and camera:
+		var crosshair_world := camera.global_position + camera.global_basis * Vector3(0, 0, -10.0)
+		var sight_world := _get_muzzle_world_pos()  # 枪口位置（近似瞄具指向）
+		var ray_dir := camera.global_basis * raycast.target_position if raycast else Vector3.ZERO
+		print("[BALLISTIC] crosshair_aim=%.2v  sight_pos=%.2v  hit=%.2v  ray_target=%.2v  ADS=%.2f  spread=%.4f" % [
+			crosshair_world, sight_world, hit_point, ray_dir, ads_alpha, spread])
 			var ray_start := camera.global_position if camera else global_position
 			_draw_debug_ray(ray_start, hit_point, raycast != null and raycast.is_colliding())
 
