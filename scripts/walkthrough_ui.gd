@@ -89,6 +89,7 @@ var _hotbar_names: Array[Label] = []      ## 每个格子底部武器名
 # ── Debug ──
 var _debug_panel: ColorRect
 var _debug_label: Label
+var _debug_weapon_icon: Label   ## 武器 icon 标签（缓存）
 var _hit_label: Label          ## 命中信息（屏幕中央）
 var _hit_fade_timer: float = 0.0
 var _god_label: Label          ## God Mode 提示
@@ -288,17 +289,17 @@ func _build_hud() -> void:
 	_debug_panel.add_child(border)
 
 	# 武器类型 icon 标签（大字 ASCII art）
-	var icon_label := Label.new()
-	icon_label.name = "WeaponIcon"
-	icon_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	icon_label.offset_left = 8
-	icon_label.offset_top = 6
-	icon_label.offset_right = 50
-	icon_label.offset_bottom = 40
-	icon_label.add_theme_font_size_override("font_size", 22)
-	icon_label.add_theme_color_override("font_color", Color(0.4, 0.85, 1.0))
-	icon_label.text = "[AR]"
-	_debug_panel.add_child(icon_label)
+	_debug_weapon_icon = Label.new()
+	_debug_weapon_icon.name = "WeaponIcon"
+	_debug_weapon_icon.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_debug_weapon_icon.offset_left = 8
+	_debug_weapon_icon.offset_top = 6
+	_debug_weapon_icon.offset_right = 50
+	_debug_weapon_icon.offset_bottom = 40
+	_debug_weapon_icon.add_theme_font_size_override("font_size", 22)
+	_debug_weapon_icon.add_theme_color_override("font_color", Color(0.4, 0.85, 1.0))
+	_debug_weapon_icon.text = "[AR]"
+	_debug_panel.add_child(_debug_weapon_icon)
 
 	# 面板标题
 	var title := Label.new()
@@ -660,7 +661,7 @@ func update_weapon(weapon_name: String, slot: int) -> void:
 func update_debug_weapon(info: Dictionary) -> void:
 	if not _debug_label:
 		return
-	# 更新 icon
+	# 更新 icon（使用缓存引用）
 	var slot: int = info.get("slot", 0)
 	var icon_texts := ["[SG]", "[SMG]", "[AR]", "[HPR]", "[V99]"]
 	var icon_colors := [
@@ -670,11 +671,9 @@ func update_debug_weapon(info: Dictionary) -> void:
 		Color(0.85, 0.75, 0.2),
 		Color(0.7, 0.3, 0.95),
 	]
-	if _debug_panel:
-		var icon_lbl: Label = _debug_panel.get_node_or_null("WeaponIcon") as Label
-		if icon_lbl and slot >= 1 and slot <= 5:
-			icon_lbl.text = icon_texts[slot - 1]
-			icon_lbl.add_theme_color_override("font_color", icon_colors[slot - 1])
+	if _debug_weapon_icon and slot >= 1 and slot <= 5:
+		_debug_weapon_icon.text = icon_texts[slot - 1]
+		_debug_weapon_icon.add_theme_color_override("font_color", icon_colors[slot - 1])
 
 	var slot_tag := "[%d] %s" % [slot, info.get("name", "?")]
 	var dmg     := "DMG      %d" % info.get("damage", 0)
@@ -682,14 +681,12 @@ func update_debug_weapon(info: Dictionary) -> void:
 	var mag     := "MAG      %d / %d" % [info.get("ammo", 0), info.get("mag_size", 0)]
 	var rng     := "RANGE    %.0f m" % info.get("weapon_range", 30)
 	var spread  := "SPREAD   %.4f  (base %.4f)" % [info.get("spread_current", 0.0), info.get("spread_base", 0.0)]
-	var jam     := "JAM      %.0f%%" % (info.get("jam_chance", 0.0) * 100.0)
 	var reload  := "RELOAD   %.1f s" % info.get("reload_time", 0.0)
-	var state   := "STATE    %s%s" % [
-		"JAMMED  " if info.get("jammed", false) else "",
-		"RELOAD" if info.get("reloading", false) else ("OK" if not info.get("jammed", false) else ""),
+	var state   := "STATE    %s" % [
+		"RELOAD" if info.get("reloading", false) else "OK",
 	]
-	_debug_label.text = "%s\n─────────────────\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s" % [
-		slot_tag, dmg, rate, mag, rng, spread, jam, reload, state
+	_debug_label.text = "%s\n─────────────────\n%s\n%s\n%s\n%s\n%s\n%s\n%s" % [
+		slot_tag, dmg, rate, mag, rng, spread, reload, state
 	]
 
 ## 命中时弹出伤害数字

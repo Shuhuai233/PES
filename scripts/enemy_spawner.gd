@@ -239,18 +239,6 @@ func _make_sphere(node_name: String, radius: float, height: float, color: Color,
 	mi.position = pos
 	return mi
 
-func _make_capsule(node_name: String, radius: float, height: float, color: Color, pos: Vector3, rot_deg: Vector3 = Vector3.ZERO) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.name = node_name
-	var m := CapsuleMesh.new()
-	m.radius = radius
-	m.height = height
-	mi.mesh = m
-	mi.set_surface_override_material(0, PSXManager.make_psx_material(color))
-	mi.position = pos
-	mi.rotation_degrees = rot_deg
-	return mi
-
 ## Create a limb with proper pivot: Node3D at joint, mesh offset downward.
 ## This makes rotation.x swing the limb like a pendulum from the joint.
 func _make_limb(node_name: String, radius: float, height: float, color: Color, pivot_pos: Vector3, rot_deg: Vector3 = Vector3.ZERO) -> Node3D:

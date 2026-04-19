@@ -193,16 +193,15 @@ func _state_in_cover(delta: float) -> void:
 	velocity.x = move_toward(velocity.x, 0.0, speed * 4.0 * delta)
 	velocity.z = move_toward(velocity.z, 0.0, speed * 4.0 * delta)
 	_look_at_player()
-	var sm = _sm
 
 	# SETUP: just hide
-	if sm and sm.is_setup_phase(): return
+	if _sm and _sm.is_setup_phase(): return
 
 	# Rusher: wait then charge
 	if archetype == 0:
 		_cover_timer -= delta
 		if _cover_timer <= 0.0:
-			if sm and (sm.is_push_phase() or sm.is_anyone_shooting()):
+			if _sm and (_sm.is_push_phase() or _sm.is_anyone_shooting()):
 				_bark("PUSHING!"); _transition(State.ADVANCE); return
 			_cover_timer = randf_range(1.0, 2.0)
 		return
@@ -214,25 +213,25 @@ func _state_in_cover(delta: float) -> void:
 	# 1. Try engagement slot
 	if _slot_request_timer <= 0.0:
 		_slot_request_timer = 0.5
-		if sm and sm.request_engagement_slot(self):
+		if _sm and _sm.request_engagement_slot(self):
 			_compute_peek_direction()
 			_peek_timer = peek_duration; _burst_remaining = burst_count; _burst_timer = 0.0
 			_bark("COVERING!"); _transition(State.PEEK_SHOOT); return
 
 	# 2. Grenade
-	if has_grenade and _grenade_cooldown <= 0.0 and sm and sm.should_throw_grenade():
+	if has_grenade and _grenade_cooldown <= 0.0 and _sm and _sm.should_throw_grenade():
 		_throw_grenade(); _bark("GRENADE!"); return
 
 	# 3. Flank (fireteam 1, Standard, after some peeks)
 	if archetype == 1 and fireteam == 1 and _peek_shoot_count >= 2:
-		if randf() < 0.15 * delta and sm:
-			var flank_dir: Vector3 = sm.request_flank_direction(self, _player)
+		if randf() < 0.15 * delta and _sm:
+			var flank_dir: Vector3 = _sm.request_flank_direction(self, _player)
 			if flank_dir != Vector3.ZERO:
 				_flank_target = _player.global_position + flank_dir * 12.0
 				_bark("FLANKING!"); _transition(State.FLANK); return
 
 	# 4. Push (fireteam 1 during PUSH)
-	if fireteam == 1 and sm and sm.is_push_phase():
+	if fireteam == 1 and _sm and _sm.is_push_phase():
 		var closer := _find_cover_closer_to_player()
 		if closer and closer != _cover_point:
 			_release_cover(); _cover_point = closer; _nav_target_set = false
@@ -265,8 +264,7 @@ func _state_peek_shoot(delta: float) -> void:
 		_fire_at_player(); _burst_remaining -= 1; _burst_timer = burst_interval
 	if _burst_remaining <= 0:
 		_peek_shoot_count += 1
-		var sm = _sm
-		if sm: sm.release_engagement_slot(self)
+		if _sm: _sm.release_engagement_slot(self)
 		if archetype == 2 and _peek_shoot_count < 4:
 			_burst_remaining = burst_count; _burst_timer = 1.0
 		else:
@@ -367,7 +365,7 @@ func _spawn_tracer(origin: Vector3, dir: Vector3) -> void:
 	tracer.global_position = origin; tracer.look_at(origin + dir, Vector3.UP)
 	var tween := tracer.create_tween()
 	tween.tween_property(tracer, "global_position", origin + dir * shoot_range, shoot_range / bullet_speed)
-	tween.parallel().tween_property(tracer, "transparency", 1.0, 0.3)
+	tween.parallel().tween_property(tracer, "modulate:a", 0.0, 0.3)
 	tween.tween_callback(tracer.queue_free)
 
 func _enemy_muzzle_flash() -> void:

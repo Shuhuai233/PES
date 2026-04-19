@@ -1,7 +1,6 @@
 extends Node
 
 ## WalkScene controller — orchestrates all systems for the walkthrough version
-const ItemDataRes := preload("res://scripts/item_data.gd")
 
 @onready var player := $Player           ## player_controller.gd
 @onready var portal := $MicrowavePortal
@@ -41,8 +40,6 @@ var _cover_debug_refresh_timer: float = 0.0
 var _flicker_lights: Array[OmniLight3D] = []
 var _flicker_timer: float = 0.0
 var _flicker_interval: float = 0.0
-var _flicker_target: OmniLight3D = null
-var _flicker_base_energy: float = 0.0
 
 func _ready() -> void:
 	session_id = SessionManager.start_session()

@@ -194,6 +194,9 @@ var _ballistic_debug: bool = false
 var _debug_lines: Array = []
 const DEBUG_LINE_MAX := 30
 var _scope_overlay: ColorRect = null  # 狙击镜黑边遮罩
+var _scope_masks: Array[ColorRect] = []  # 四边遮罩（缓存避免每帧 get_node_or_null）
+var _scope_cross_h: ColorRect = null     # 十字线水平
+var _scope_cross_v: ColorRect = null     # 十字线垂直
 
 # 缓存节点引用（避免每帧 get_node_or_null）
 var _ui_node_cache: Node = null
@@ -966,7 +969,7 @@ func _update_ads(delta: float) -> void:
 	ads_alpha = move_toward(ads_alpha, target_alpha, delta * ads_speed)
 
 	# 插值枪械位置：hip → ADS center
-	if gun_pivot and not _is_tween_active():
+	if gun_pivot:
 		var target_pos := GUN_HIP_POS.lerp(_gun_ads_pos, ads_alpha)
 		bob_origin = target_pos
 
@@ -992,10 +995,6 @@ func _update_ads(delta: float) -> void:
 func _is_sniper() -> bool:
 	return _current_weapon_id == &"sniper_disc"
 
-func _is_tween_active() -> bool:
-	# 检查是否有活跃的 equip/kick/reload tween（避免与 ADS 位置冲突）
-	return false  # tweens 会自动设置 gun_pivot.position，ADS 通过 bob_origin 驱动
-
 ## 创建狙击镜黑边遮罩 UI
 func _build_scope_overlay() -> void:
 	# 使用 CanvasLayer 确保总在最上层
@@ -1012,28 +1011,30 @@ func _build_scope_overlay() -> void:
 	canvas.add_child(_scope_overlay)
 
 	# 中心圆形镜片区域（用一个简单的十字线标记）
-	var scope_cross_h := ColorRect.new()
-	scope_cross_h.name = "ScopeCrossH"
-	scope_cross_h.set_anchors_preset(Control.PRESET_CENTER)
-	scope_cross_h.size = Vector2(300, 1)
-	scope_cross_h.position = Vector2(-150, 0)
-	scope_cross_h.color = Color(0, 0, 0, 0.5)
-	_scope_overlay.add_child(scope_cross_h)
+	_scope_cross_h = ColorRect.new()
+	_scope_cross_h.name = "ScopeCrossH"
+	_scope_cross_h.set_anchors_preset(Control.PRESET_CENTER)
+	_scope_cross_h.size = Vector2(300, 1)
+	_scope_cross_h.position = Vector2(-150, 0)
+	_scope_cross_h.color = Color(0, 0, 0, 0.5)
+	_scope_overlay.add_child(_scope_cross_h)
 
-	var scope_cross_v := ColorRect.new()
-	scope_cross_v.name = "ScopeCrossV"
-	scope_cross_v.set_anchors_preset(Control.PRESET_CENTER)
-	scope_cross_v.size = Vector2(1, 300)
-	scope_cross_v.position = Vector2(0, -150)
-	scope_cross_v.color = Color(0, 0, 0, 0.5)
-	_scope_overlay.add_child(scope_cross_v)
+	_scope_cross_v = ColorRect.new()
+	_scope_cross_v.name = "ScopeCrossV"
+	_scope_cross_v.set_anchors_preset(Control.PRESET_CENTER)
+	_scope_cross_v.size = Vector2(1, 300)
+	_scope_cross_v.position = Vector2(0, -150)
+	_scope_cross_v.color = Color(0, 0, 0, 0.5)
+	_scope_overlay.add_child(_scope_cross_v)
 
 	# 四边黑色遮罩（形成圆形视野效果）
+	_scope_masks.clear()
 	for i in 4:
 		var mask := ColorRect.new()
 		mask.name = "ScopeMask%d" % i
 		mask.color = Color(0, 0, 0, 0.92)
 		_scope_overlay.add_child(mask)
+		_scope_masks.append(mask)
 
 func _show_scope_overlay(show: bool) -> void:
 	if _scope_overlay == null:
@@ -1047,32 +1048,22 @@ func _show_scope_overlay(show: bool) -> void:
 		var cy := vp_size.y * 0.5
 		var radius: float = min(cx, cy) * 0.38
 		# 上下左右遮罩
-		var masks: Array[ColorRect] = []
-		for i in 4:
-			var m := _scope_overlay.get_node_or_null("ScopeMask%d" % i) as ColorRect
-			if m: masks.append(m)
-		if masks.size() == 4:
-			# 上
-			masks[0].position = Vector2(0, 0)
-			masks[0].size = Vector2(vp_size.x, cy - radius)
-			# 下
-			masks[1].position = Vector2(0, cy + radius)
-			masks[1].size = Vector2(vp_size.x, cy - radius)
-			# 左
-			masks[2].position = Vector2(0, cy - radius)
-			masks[2].size = Vector2(cx - radius, radius * 2)
-			# 右
-			masks[3].position = Vector2(cx + radius, cy - radius)
-			masks[3].size = Vector2(cx - radius, radius * 2)
+		if _scope_masks.size() == 4:
+			_scope_masks[0].position = Vector2(0, 0)
+			_scope_masks[0].size = Vector2(vp_size.x, cy - radius)
+			_scope_masks[1].position = Vector2(0, cy + radius)
+			_scope_masks[1].size = Vector2(vp_size.x, cy - radius)
+			_scope_masks[2].position = Vector2(0, cy - radius)
+			_scope_masks[2].size = Vector2(cx - radius, radius * 2)
+			_scope_masks[3].position = Vector2(cx + radius, cy - radius)
+			_scope_masks[3].size = Vector2(cx - radius, radius * 2)
 		# 更新十字线位置
-		var cross_h := _scope_overlay.get_node_or_null("ScopeCrossH") as ColorRect
-		var cross_v := _scope_overlay.get_node_or_null("ScopeCrossV") as ColorRect
-		if cross_h:
-			cross_h.position = Vector2(cx - 150, cy)
-			cross_h.color = Color(0, 0, 0, 0.6)
-		if cross_v:
-			cross_v.position = Vector2(cx, cy - 150)
-			cross_v.color = Color(0, 0, 0, 0.6)
+		if _scope_cross_h:
+			_scope_cross_h.position = Vector2(cx - 150, cy)
+			_scope_cross_h.color = Color(0, 0, 0, 0.6)
+		if _scope_cross_v:
+			_scope_cross_v.position = Vector2(cx, cy - 150)
+			_scope_cross_v.color = Color(0, 0, 0, 0.6)
 
 # ─────────────────────────────────────────────
 # 摄像机震动系统

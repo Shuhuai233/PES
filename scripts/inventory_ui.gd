@@ -3,7 +3,6 @@ extends CanvasLayer
 ## InventoryUI — Tab menu with grid backpack, equip slot, drag-drop, item info.
 
 const ItemDataRes := preload("res://scripts/item_data.gd")
-const Inv := preload("res://scripts/inventory.gd")
 
 const CELL_SIZE := 56
 const CELL_GAP := 2

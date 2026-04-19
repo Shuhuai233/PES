@@ -10,9 +10,6 @@ extends Node3D
 
 const CF := preload("res://scripts/cover_factory.gd")
 
-const PILLAR_SIZE := Vector3(0.6, 3.2, 0.6)
-const PILLAR_COLOR := Color(0.50, 0.46, 0.32)
-
 # ─────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────
