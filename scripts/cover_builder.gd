@@ -236,4 +236,4 @@ func _place_cover_point(pos: Vector3, facing: Vector3, cover_type: String, index
 	var scene_root := get_tree().edited_scene_root
 	if scene_root:
 		marker.owner = scene_root
-	marker.add_to_group("cover_point")
+	marker.add_to_group("cover_point", true)  # persistent=true so it saves in .tscn
