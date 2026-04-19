@@ -305,71 +305,25 @@ static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_r
 # Sniper charge ring
 # ─────────────────────────────────────────────
 
-## V99 狙击枪外廓半径查表（Z → 从中心到最外边的距离）
-## 考虑枪管、枪身、电池、瞄具、散热片的所有突出部分
-static func _sniper_profile_radius(z: float) -> float:
-	# 纵向（Y）外廓：取瞄具顶部和电池底部的最大值
-	# 横向（X）外廓：取枪身宽度和散热片的最大值
-	# 返回两者中较大的作为方框半径
-	var y_top: float  # 最高点（瞄具或枪身）
-	var y_bot: float  # 最低点（电池或枪身）
-	var x_half: float # 半宽（枪身或散热片）
-
-	if z < -0.66:
-		# 枪管区域：只有枪管圆柱 r=0.03
-		y_top = 0.035
-		y_bot = 0.035
-		x_half = 0.03
-	elif z < -0.26:
-		# 枪体前段 + 散热片区域
-		var t: float = clampf((z - (-0.66)) / 0.40, 0.0, 1.0)
-		y_top = lerpf(0.035, 0.07, t)
-		y_bot = lerpf(0.035, 0.07, t)
-		x_half = lerpf(0.03, 0.065, t)  # 散热片 X=0.06
-		# 瞄具从 Z≈-0.26 开始，这里还没到
-	elif z < 0.0:
-		# 瞄具区域（Z=-0.26 到 Z=0.0）：瞄具顶 Y=0.15
-		var t: float = clampf((z - (-0.26)) / 0.26, 0.0, 1.0)
-		y_top = lerpf(0.07, 0.16, t)  # 瞄具顶面 Y=0.15，从中心算 ~0.16
-		y_bot = lerpf(0.07, 0.14, t)  # 电池底部
-		x_half = lerpf(0.065, 0.07, t)  # 电池宽 0.13/2
-	elif z < 0.17:
-		# 电池/枪体后段
-		y_top = 0.16  # 仍在瞄具范围内
-		y_bot = 0.14
-		x_half = 0.07
-	elif z < 0.50:
-		# 枪托区域：瞄具已结束
-		var t: float = clampf((z - 0.17) / 0.33, 0.0, 1.0)
-		y_top = lerpf(0.16, 0.09, t)
-		y_bot = lerpf(0.14, 0.09, t)
-		x_half = lerpf(0.07, 0.05, t)
-	else:
-		y_top = 0.09
-		y_bot = 0.09
-		x_half = 0.05
-
-	return maxf(maxf(y_top, y_bot), x_half)
-
 static func spawn_charge_ring(gun_pivot: Node3D, sniper_charge: float) -> void:
 	if gun_pivot == null:
 		return
-	# 方框间距（比枪身截面大这么多）
-	var clearance: float = 0.025 + sniper_charge * 0.01
-	var start_z: float = -0.90
-	var start_radius: float = _sniper_profile_radius(start_z) + clearance
+	# 方框大小 = 枪身最宽处（瞄具顶部 0.154 from center=0.01）+ 固定间距
+	# 保证方框在任何位置都不会穿入枪身任何部件
+	var max_profile: float = 0.16  # 瞄具区域从 Y=0.01 到 Y=0.154
+	var clearance: float = 0.03 + sniper_charge * 0.015
+	var ring_size: float = max_profile + clearance
 	var thickness: float = 0.008
 	var glow_color := Color(1.0, 0.15, 0.1, 0.9)
 	var mat := _get_mat(glow_color)
 
-	# 构建方框（初始大小贴合枪管处截面）
 	var ring := Node3D.new()
 	ring.name = "ChargeRing"
 	for data in [
-		[Vector3(0, start_radius, 0), Vector3(start_radius * 2, thickness, thickness)],
-		[Vector3(0, -start_radius, 0), Vector3(start_radius * 2, thickness, thickness)],
-		[Vector3(-start_radius, 0, 0), Vector3(thickness, start_radius * 2, thickness)],
-		[Vector3(start_radius, 0, 0), Vector3(thickness, start_radius * 2, thickness)],
+		[Vector3(0, ring_size, 0), Vector3(ring_size * 2, thickness, thickness)],
+		[Vector3(0, -ring_size, 0), Vector3(ring_size * 2, thickness, thickness)],
+		[Vector3(-ring_size, 0, 0), Vector3(thickness, ring_size * 2, thickness)],
+		[Vector3(ring_size, 0, 0), Vector3(thickness, ring_size * 2, thickness)],
 	]:
 		var edge := MeshInstance3D.new()
 		var em := BoxMesh.new()
@@ -385,18 +339,17 @@ static func spawn_charge_ring(gun_pivot: Node3D, sniper_charge: float) -> void:
 	glow_light.omni_range = 0.6
 	ring.add_child(glow_light)
 	gun_pivot.add_child(ring)
+
+	var start_z: float = -0.90
+	var end_z: float = 0.80
 	ring.position = Vector3(0, 0.01, start_z)
 
-	# 动画：Z 移动 + scale 跟随枪身截面变化
-	var end_z: float = 0.80
 	var travel_time: float = lerpf(2.1, 0.75, sniper_charge)
-	# 计算终点处的枪身半径，算出需要的缩放比
-	var end_radius: float = _sniper_profile_radius(end_z) + clearance * 3.0
-	var scale_ratio: float = end_radius / maxf(start_radius, 0.01)
 	var tw := ring.create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(ring, "position:z", end_z, travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	tw.tween_property(ring, "scale", Vector3(scale_ratio, scale_ratio, 1.0), travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
+	# 微小放大（1x → 1.8x），方框始终比枪身大，不会穿模
+	tw.tween_property(ring, "scale", Vector3(1.8, 1.8, 1.0), travel_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
 	tw.tween_property(glow_light, "omni_range", 1.5, travel_time)
 	tw.set_parallel(false)
 	tw.tween_callback(ring.queue_free)

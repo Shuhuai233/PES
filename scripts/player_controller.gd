@@ -753,23 +753,24 @@ func _kick_gun() -> void:
 		_gun_tween.kill()
 	_gun_tween = create_tween()
 	if is_aiming:
-		# ADS kick: 明显的后退+旋转（tween 现在不会被覆盖了）
-		var ads_z: float = recoil_kick_pos * 3.0
-		var ads_kick := _gun_ads_pos + Vector3(0, recoil_kick_pos * 0.5, ads_z)
-		var ads_rot_v := -recoil_kick_rot * 0.7
-		var ads_rot_h: float = randf_range(-1.0, 1.0)
-		_gun_tween.tween_property(gun_pivot, "position", ads_kick, 0.035)
-		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(ads_rot_v, ads_rot_h, 0), 0.035)
+		# ADS kick: 以 Z 后退（平行枪管）为主，Y/旋转极小
+		var ads_z: float = recoil_kick_pos * 3.5  # 主要后退
+		var ads_y: float = recoil_kick_pos * 0.1  # 极微小的上跳
+		var ads_kick := _gun_ads_pos + Vector3(0, ads_y, ads_z)
+		var ads_rot_v := -recoil_kick_rot * 0.15  # 极微小的仰角
+		_gun_tween.tween_property(gun_pivot, "position", ads_kick, 0.03)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(ads_rot_v, 0, 0), 0.03)
 		_gun_tween.tween_property(gun_pivot, "position", _gun_ads_pos, 0.10)
 		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.10)
 	else:
-		# Hip-fire kick: 比之前减 20%
-		var kick_z: float = recoil_kick_pos * 3.2
-		var kick_pos := bob_origin + Vector3(0, recoil_kick_pos * 0.65, kick_z)
-		var rot_v := -recoil_kick_rot * 1.05
-		var rot_h: float = randf_range(-2.0, 2.0)
+		# Hip-fire kick: Z 后退为主，辅以 Y 和旋转
+		var kick_z: float = recoil_kick_pos * 3.2  # 主要后退
+		var kick_y: float = recoil_kick_pos * 0.5  # 辅助上跳
+		var kick_pos := bob_origin + Vector3(0, kick_y, kick_z)
+		var rot_v := -recoil_kick_rot * 0.8  # 辅助仰角
+		var rot_h: float = randf_range(-1.5, 1.5)  # 辅助水平偏
 		_gun_tween.tween_property(gun_pivot, "position", kick_pos, 0.03)
-		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, randf_range(-1.2, 1.2)), 0.03)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, randf_range(-0.8, 0.8)), 0.03)
 		_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.1)
 		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.1)
 
