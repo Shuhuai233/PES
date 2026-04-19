@@ -24,6 +24,8 @@ var _free_cam_node: Camera3D = null
 var _free_cam_speed: float = 15.0
 var _free_cam_yaw: float = 0.0
 var _free_cam_pitch: float = 0.0
+var _tactical_map: Control = null
+var _tactical_layer: CanvasLayer = null
 
 # ── Cached references (avoid per-frame get_node_or_null) ──
 var _sm_cache: Node = null
@@ -292,6 +294,23 @@ func _toggle_debug() -> void:
 	_toggle_navmesh_debug_mesh()
 	# Toggle cover point markers
 	_toggle_cover_debug()
+	# Toggle tactical minimap
+	_toggle_tactical_map()
+
+func _toggle_tactical_map() -> void:
+	if _debug_ai:
+		if _tactical_layer == null:
+			_tactical_layer = CanvasLayer.new()
+			_tactical_layer.name = "TacticalMapLayer"
+			_tactical_layer.layer = 100
+			add_child(_tactical_layer)
+			_tactical_map = Control.new()
+			_tactical_map.set_script(load("res://scripts/tactical_map.gd"))
+			_tactical_layer.add_child(_tactical_map)
+		_tactical_layer.visible = true
+	else:
+		if _tactical_layer:
+			_tactical_layer.visible = false
 
 func _toggle_navmesh_debug_mesh() -> void:
 	if _debug_ai:

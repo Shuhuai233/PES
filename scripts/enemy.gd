@@ -31,6 +31,7 @@ extends CharacterBody3D
 
 @export_group("Archetype")
 @export var archetype: int = 1  ## 0=Rusher, 1=Standard, 2=Heavy
+@export var ideal_engage_distance: float = 15.0  ## optimal combat range for this weapon
 
 @export_group("Grenade")
 @export var has_grenade: bool = false
@@ -163,12 +164,6 @@ func _physics_process(delta: float) -> void:
 
 # ═══════════════ SEEK_COVER ═══════════════
 func _state_seek_cover(delta: float) -> void:
-	# Rusher: after SETUP, go ADVANCE if teammates covering
-	if archetype == 0 and _sm and not _sm.is_setup_phase():
-		if _sm.is_anyone_shooting():
-			_bark("PUSHING!")
-			_transition(State.ADVANCE)
-			return
 
 	if _cover_point == null or not is_instance_valid(_cover_point):
 		_cover_point = _find_best_cover()
@@ -210,13 +205,31 @@ func _state_in_cover(delta: float) -> void:
 	# SETUP: just hide
 	if _sm and _sm.is_setup_phase(): return
 
-	# Rusher: wait then charge
+	# Rusher: use cover but push forward when teammates suppress
 	if archetype == 0:
 		_cover_timer -= delta
 		if _cover_timer <= 0.0:
-			if _sm and (_sm.is_push_phase() or _sm.is_anyone_shooting()):
-				_bark("PUSHING!"); _transition(State.ADVANCE); return
-			_cover_timer = randf_range(1.0, 2.0)
+			_cover_timer = randf_range(2.0, 4.0)
+			# If teammates are shooting, try to push to CLOSER cover
+			if _sm and _sm.is_anyone_shooting():
+				var closer := _find_cover_closer_to_player()
+				if closer and closer != _cover_point:
+					_release_cover()
+					_cover_point = closer
+					_nav_target_set = false
+					_bark("PUSHING!")
+					_transition(State.SEEK_COVER)
+					return
+			# If already close enough, try to get a shooting slot
+			var dist_to_player := _flat_dist_to(_player.global_position)
+			if dist_to_player < shoot_range and _sm and _sm.request_engagement_slot(self):
+				_compute_peek_direction()
+				_peek_timer = peek_duration; _burst_remaining = burst_count; _burst_timer = 0.0
+				_transition(State.PEEK_SHOOT)
+				return
+			# Only melee if player walks into us (reactive, not proactive)
+			if dist_to_player < melee_range:
+				_try_melee()
 		return
 
 	# Standard/Heavy decision loop
@@ -298,22 +311,30 @@ func _state_retreat(_delta: float) -> void:
 # ═══════════════ ADVANCE ═══════════════
 func _state_advance(delta: float) -> void:
 	var dist := _flat_dist_to(_player.global_position)
+
+	# Melee only if player walks into us (reactive)
 	if dist < melee_range:
 		velocity.x = move_toward(velocity.x, 0.0, speed * 4.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, speed * 4.0 * delta)
 		_try_melee(); _look_at_player(); return
+
+	# ALL archetypes: try to find cover once within engagement range
+	if dist < ideal_engage_distance + 5.0:
+		var cover := _find_best_cover()
+		if cover:
+			_cover_point = cover; _nav_target_set = false
+			_transition(State.SEEK_COVER); return
+
+	# Navigate toward player but stop trying to get closer than engage distance
 	var move_speed: float = sprint_speed if archetype == 0 else speed
 	_navigate_toward(_player.global_position, move_speed)
 	_look_at_player()
-	# Non-rusher hip-fire
+
+	# Hip-fire while advancing (all archetypes except Rusher who sprints silently)
 	if archetype != 0:
 		_advance_shoot_timer -= delta
 		if _advance_shoot_timer <= 0.0 and dist < shoot_range:
 			_fire_at_player(); _advance_shoot_timer = randf_range(0.8, 1.5)
-	# Non-rusher seek cover
-	if archetype != 0 and dist > advance_range:
-		var cover := _find_best_cover()
-		if cover: _cover_point = cover; _nav_target_set = false; _transition(State.SEEK_COVER); return
 	# Hurt rusher dives to cover
 	if archetype == 0 and health < max_health * 0.3:
 		var cover := _find_best_cover()
@@ -521,19 +542,45 @@ func _evaluate_single_cover(cp: Node3D) -> float:
 	elif ch >= 0.8: score += 4.0
 	else: score -= 6.0
 
-	# 4. Distance
+	# 4. Distance — weapon-based engagement distance
 	score -= dist_to_me * 0.8
-	if dist_to_player > 6.0 and dist_to_player < 16.0: score += 5.0
+	var dist_from_ideal: float = abs(dist_to_player - ideal_engage_distance)
+	if dist_from_ideal < 4.0:
+		score += 15.0   # sweet spot for my weapon
+	elif dist_from_ideal < 8.0:
+		score += 5.0    # acceptable
+	else:
+		score -= 10.0   # too far or too close for my weapon
 
-	# 5. Fireteam clustering
+	# 5. Fireteam clustering (strong weight)
 	if _sm:
 		var members: Array = _sm.get_fireteam_members(fireteam)
 		for ally in members:
 			if ally == self: continue
 			var ad := cp_pos.distance_to(ally.global_position)
 			if ad < 2.0: score -= 10.0
-			elif ad <= 8.0: score += 8.0
-			elif ad > 15.0: score -= 5.0
+			elif ad <= 8.0: score += 15.0   # strong clustering bonus
+			elif ad > 15.0: score -= 8.0    # penalty for being too far from team
+
+	# 6. Fireteam directional preference
+	if _player and _sm:
+		var player_fwd: Vector3 = -_player.global_basis.z
+		player_fwd.y = 0.0
+		if player_fwd.length() > 0.01:
+			player_fwd = player_fwd.normalized()
+			var cover_dir: Vector3 = (cp_pos - player_pos)
+			cover_dir.y = 0.0
+			if cover_dir.length() > 0.01:
+				cover_dir = cover_dir.normalized()
+				var dir_dot: float = player_fwd.dot(cover_dir)
+				if fireteam == 0:
+					# FT0 prefers cover in FRONT of player (dot > 0 = player facing toward cover)
+					if dir_dot > 0.3: score += 8.0
+					elif dir_dot < -0.3: score -= 5.0
+				else:
+					# FT1 prefers cover to the SIDE of player (abs(dot) < 0.5)
+					if abs(dir_dot) < 0.5: score += 8.0
+					elif abs(dir_dot) > 0.7: score -= 3.0
 
 	# Store score for debug
 	cp.set_meta("last_score", score)

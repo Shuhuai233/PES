@@ -25,17 +25,17 @@ const COLOR_VARIANTS: Array[Color] = [
 const VARIANT_STATS := [
 	# Red — Rusher: CQC/Short, 霰弹风格
 	{ "speed": 4.0, "sprint": 6.0, "health": 60,  "accuracy": 0.70, "burst": 2, "damage": 22,
-	  "archetype": 0, "grenade": false,
+	  "archetype": 0, "grenade": false, "engage_dist": 10.0,
 	  "shoot_range": 12.0, "burst_interval": 0.3,
 	  "gun_color": Color(0.6, 0.15, 0.05), "gun_barrel_len": 0.08 },
 	# Blue — Standard: Medium, 突击步枪风格
 	{ "speed": 2.5, "sprint": 5.0, "health": 100, "accuracy": 0.85, "burst": 3, "damage": 10,
-	  "archetype": 1, "grenade": true,
+	  "archetype": 1, "grenade": true, "engage_dist": 15.0,
 	  "shoot_range": 35.0, "burst_interval": 0.18,
 	  "gun_color": Color(0.08, 0.12, 0.22), "gun_barrel_len": 0.18 },
 	# Green — Heavy: Long, DMR风格
 	{ "speed": 2.0, "sprint": 3.5, "health": 150, "accuracy": 0.92, "burst": 1, "damage": 55,
-	  "archetype": 2, "grenade": false,
+	  "archetype": 2, "grenade": false, "engage_dist": 25.0,
 	  "shoot_range": 80.0, "burst_interval": 0.6,
 	  "gun_color": Color(0.12, 0.28, 0.10), "gun_barrel_len": 0.30 },
 ]
@@ -146,6 +146,7 @@ func _build_enemy() -> CharacterBody3D:
 	root.set("burst_count", stats["burst"])
 	root.set("shoot_damage", stats["damage"])
 	root.set("archetype", stats["archetype"])
+	root.set("ideal_engage_distance", stats["engage_dist"])
 	root.set("has_grenade", stats["grenade"])
 	root.set("shoot_range", stats["shoot_range"])
 	root.set("burst_interval", stats["burst_interval"])
