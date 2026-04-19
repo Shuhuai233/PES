@@ -545,10 +545,10 @@ func update_crosshair_spread(spread: float) -> void:
 func update_ads_visuals(ads_alpha: float) -> void:
 	# 暗角随 ADS 渐入
 	if ads_vignette:
-		ads_vignette.color.a = ads_alpha * 0.15
-	# 准心随 ADS 淡出（用瞄具代替）
+		ads_vignette.color.a = ads_alpha * 0.12
+	# ADS 时准心保持完全可见（准心 = 实际射击位置，必须清晰可读）
 	if crosshair:
-		crosshair.modulate.a = 1.0 - ads_alpha * 0.8  # ADS 时准心变 20% 透明度
+		crosshair.modulate.a = 1.0
 
 # ─────────────────────────────────────────────
 # 教程显示

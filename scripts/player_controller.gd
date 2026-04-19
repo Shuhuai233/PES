@@ -753,15 +753,11 @@ func _kick_gun() -> void:
 		_gun_tween.kill()
 	_gun_tween = create_tween()
 	if is_aiming:
-		# ADS kick: 以 Z 后退（平行枪管）为主，Y/旋转极小
-		var ads_z: float = recoil_kick_pos * 3.5  # 主要后退
-		var ads_y: float = recoil_kick_pos * 0.1  # 极微小的上跳
-		var ads_kick := _gun_ads_pos + Vector3(0, ads_y, ads_z)
-		var ads_rot_v := -recoil_kick_rot * 0.15  # 极微小的仰角
+		# ADS kick: 纯 Z 后退（平行枪管），零旋转，瞄具不抖
+		var ads_z: float = recoil_kick_pos * 3.5
+		var ads_kick := _gun_ads_pos + Vector3(0, 0, ads_z)
 		_gun_tween.tween_property(gun_pivot, "position", ads_kick, 0.03)
-		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(ads_rot_v, 0, 0), 0.03)
 		_gun_tween.tween_property(gun_pivot, "position", _gun_ads_pos, 0.10)
-		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.10)
 	else:
 		# Hip-fire kick: Z 后退为主，辅以 Y 和旋转
 		var kick_z: float = recoil_kick_pos * 3.2  # 主要后退
@@ -961,15 +957,7 @@ func _update_ads(delta: float) -> void:
 		var target_pos := GUN_HIP_POS.lerp(_gun_ads_pos, ads_alpha)
 		bob_origin = target_pos
 
-	# ADS 呼吸摇摆（轻微正弦波晃动）
-	if is_aiming and ads_alpha > 0.9 and gun_pivot:
-		var breath_time := Time.get_ticks_msec() * 0.001
-		var sway_x: float = sin(breath_time * 1.2) * 0.002
-		var sway_y: float = sin(breath_time * 0.8 + 0.5) * 0.0015
-		gun_pivot.position.x += sway_x
-		gun_pivot.position.y += sway_y
-
-	# 通知 HUD 更新 ADS 视觉（暗角 + 准心淡出）
+	# 通知 HUD 更新 ADS 视觉（暗角，准心保持可见）
 	if not _ui_cache_checked:
 		_ui_node_cache = get_node_or_null("/root/WalkScene/WalkthroughUI")
 		_ui_cache_checked = true
