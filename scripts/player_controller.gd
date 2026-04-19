@@ -402,19 +402,19 @@ func _update_weapon_bob(delta: float) -> void:
 	if gun_pivot == null:
 		return
 
-	# ── ADS 完全就位时，强制锁定位置和旋转，杀掉所有枪械 tween ──
+	# ── ADS 就位时：让 kick tween 自然播放，tween 不活跃时才锁定位置 ──
 	if is_aiming and ads_alpha > 0.9:
-		if _gun_tween and _gun_tween.is_running():
-			_gun_tween.kill()
-			_gun_tween = null
-			# 只在 shoot_timer 已归零时恢复（避免覆盖射击 cooldown）
-			if shoot_timer <= 0.0:
-				can_shoot = true
-		gun_pivot.position = _gun_ads_pos
-		gun_pivot.rotation_degrees = Vector3.ZERO
 		bob_origin = _gun_ads_pos
 		bob_time = 0.0
 		camera.rotation_degrees.z = lerp(camera.rotation_degrees.z, 0.0, delta * 10.0)
+		# kick tween 正在播放时不覆盖（让枪身抖动可见）
+		if _gun_tween and _gun_tween.is_running():
+			return
+		# tween 不活跃：锁定到 ADS 位置
+		gun_pivot.position = _gun_ads_pos
+		gun_pivot.rotation_degrees = Vector3.ZERO
+		if shoot_timer <= 0.0:
+			can_shoot = true
 		return
 
 	var speed := velocity.length()
@@ -753,20 +753,23 @@ func _kick_gun() -> void:
 		_gun_tween.kill()
 	_gun_tween = create_tween()
 	if is_aiming:
-		# ADS kick: 主要是向后推（Z 正方向 = 朝玩家）
-		var ads_kick := bob_origin + Vector3(0, 0.006, recoil_kick_pos * 2.0)
-		_gun_tween.tween_property(gun_pivot, "position", ads_kick, 0.03)
-		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(-recoil_kick_rot * 0.4, 0, 0), 0.03)
-		_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.08)
-		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.08)
+		# ADS kick: 明显的后退+旋转（tween 现在不会被覆盖了）
+		var ads_z: float = recoil_kick_pos * 3.0
+		var ads_kick := _gun_ads_pos + Vector3(0, recoil_kick_pos * 0.5, ads_z)
+		var ads_rot_v := -recoil_kick_rot * 0.7
+		var ads_rot_h: float = randf_range(-1.0, 1.0)
+		_gun_tween.tween_property(gun_pivot, "position", ads_kick, 0.035)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(ads_rot_v, ads_rot_h, 0), 0.035)
+		_gun_tween.tween_property(gun_pivot, "position", _gun_ads_pos, 0.10)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.10)
 	else:
-		# Hip-fire kick: 大幅向后推 + 旋转
-		var kick_z: float = recoil_kick_pos * 4.0  # 非常明显的后退
-		var kick_pos := bob_origin + Vector3(0, recoil_kick_pos * 0.8, kick_z)
-		var rot_v := -recoil_kick_rot * 1.3
-		var rot_h: float = randf_range(-2.5, 2.5)
+		# Hip-fire kick: 比之前减 20%
+		var kick_z: float = recoil_kick_pos * 3.2
+		var kick_pos := bob_origin + Vector3(0, recoil_kick_pos * 0.65, kick_z)
+		var rot_v := -recoil_kick_rot * 1.05
+		var rot_h: float = randf_range(-2.0, 2.0)
 		_gun_tween.tween_property(gun_pivot, "position", kick_pos, 0.03)
-		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, randf_range(-1.5, 1.5)), 0.03)
+		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3(rot_v, rot_h, randf_range(-1.2, 1.2)), 0.03)
 		_gun_tween.tween_property(gun_pivot, "position", bob_origin, 0.1)
 		_gun_tween.tween_property(gun_pivot, "rotation_degrees", Vector3.ZERO, 0.1)
 
