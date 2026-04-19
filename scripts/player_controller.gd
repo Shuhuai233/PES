@@ -721,18 +721,25 @@ func _fire_single_ray(dmg: int, spread: float) -> void:
 
 	# ── DEBUG PRINT ──
 	if _ballistic_debug and camera:
-		var cam_aim := camera.global_position + camera.global_basis * Vector3(0, 0, -10)
-		var sight_world := Vector3.ZERO
+		var vp_size := get_viewport().get_visible_rect().size
+		var screen_center := vp_size * 0.5
+		# RedDot/FrontDot 在屏幕上的位置
+		var sight_screen := Vector2(-1, -1)
 		if gun_pivot:
-			var rds: Node = gun_pivot.find_child("RedDot", false, false)
-			if rds:
-				sight_world = rds.global_position
-			else:
-				var fd: Node = gun_pivot.find_child("FrontDot", false, false)
-				if fd:
-					sight_world = fd.global_position
-		print("[BALLISTIC] hit=%s cam_aim=%.2v sight=%.2v hit_pos=%.2v spread=%.4f ADS=%.2f" % [
-			did_hit, cam_aim, sight_world, hit_point, spread, ads_alpha])
+			var rds: Node3D = gun_pivot.find_child("RedDot", true, false) as Node3D
+			if rds == null:
+				rds = gun_pivot.find_child("FrontDot", true, false) as Node3D
+			if rds and camera.is_position_behind(rds.global_position) == false:
+				sight_screen = camera.unproject_position(rds.global_position)
+		var sight_offset := sight_screen - screen_center if sight_screen.x >= 0 else Vector2(-999, -999)
+		# hit_point 在屏幕上的位置
+		var hit_screen := camera.unproject_position(hit_point)
+		var hit_offset := hit_screen - screen_center
+		print("[BALLISTIC] hit=%s ADS=%.2f spread=%.4f  sight_px=(%.1f,%.1f)  hit_px=(%.1f,%.1f)  center=(%.0f,%.0f)" % [
+			did_hit, ads_alpha, spread,
+			sight_offset.x, sight_offset.y,
+			hit_offset.x, hit_offset.y,
+			screen_center.x, screen_center.y])
 
 ## 散弹枪 — 8 发弹丸扇形散射
 func _fire_shotgun_pellets() -> void:
