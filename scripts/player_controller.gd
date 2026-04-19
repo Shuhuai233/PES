@@ -690,6 +690,20 @@ func _fire_single_ray(dmg: int, spread: float) -> void:
 	if raycast and raycast.is_colliding():
 		hit_point = raycast.get_collision_point()
 		var hit_normal := raycast.get_collision_normal()
+		# ── DEBUG: 打印准心/瞄具/击中点位置 ──
+		if _ballistic_debug:
+			var cam_aim := camera.global_position + camera.global_basis * Vector3(0, 0, -10)
+			var sight_world := Vector3.ZERO
+			if gun_pivot:
+				var rds: Node = gun_pivot.find_child("RedDot", false, false)
+				if rds:
+					sight_world = rds.global_position
+				var fd: Node = gun_pivot.find_child("FrontDot", false, false)
+				if fd and sight_world == Vector3.ZERO:
+					sight_world = fd.global_position
+			var cam_to_hit: float = (cam_aim - hit_point).length()
+			var sight_to_hit: float = (sight_world - hit_point).length() if sight_world != Vector3.ZERO else -1.0
+			print("[BALLISTIC] cam_aim=%.3v  sight=%.3v  hit=%.3v  cam→hit=%.3f  sight→hit=%.3f  spread=%.4f  ADS=%.2f" % [cam_aim, sight_world, hit_point, cam_to_hit, sight_to_hit, spread, ads_alpha])
 		var collider := raycast.get_collider()
 		if collider and collider.is_in_group("enemies"):
 			# 爆头：命中点 Y > 敌人脚底 + 1.3（缩小到头部 top 20%）
