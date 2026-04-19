@@ -778,7 +778,7 @@ func _fire_shotgun_pellets() -> void:
 		else:
 			hit_point = camera.global_position + camera.global_basis * raycast.target_position
 		if i == 0:
-	VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger(), _current_weapon_id)
+			VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger(), _current_weapon_id)
 			var ray_start := camera.global_position if camera else global_position
 			_draw_debug_ray(ray_start, hit_point, did_hit)
 
