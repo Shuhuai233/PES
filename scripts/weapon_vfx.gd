@@ -277,20 +277,20 @@ static func spawn_tracer(muzzle_pos: Vector3, hit_point: Vector3, scene_root: No
 	var tracer_color := Color(1.0, 0.9, 0.4)
 	match weapon_id:
 		&"shotgun_cqc":
-			tracer_width = 0.03
-			tracer_color = Color(1.0, 0.6, 0.2)  # 粗橙色
+			tracer_width = 0.06
+			tracer_color = Color(1.0, 0.6, 0.2)
 		&"smg_short":
 			tracer_width = 0.01
-			tracer_color = Color(1.0, 0.9, 0.4)  # 细黄色
+			tracer_color = Color(1.0, 0.9, 0.4)
 		&"ar_medium":
-			tracer_width = 0.012
+			tracer_width = 0.02
 			tracer_color = Color(1.0, 0.85, 0.3)
 		&"dmr_long":
-			tracer_width = 0.02
-			tracer_color = Color(1.0, 1.0, 0.8)  # 粗亮白
+			tracer_width = 0.04
+			tracer_color = Color(1.0, 1.0, 0.8)
 		&"sniper_disc":
-			tracer_width = 0.035
-			tracer_color = Color(0.4, 0.7, 1.0)  # 粗蓝色能量束
+			tracer_width = 0.07
+			tracer_color = Color(0.4, 0.7, 1.0)
 	var tracer := _get_pooled("tracer", scene_root)
 	var tracer_len: float = minf(dist, 3.0)
 	if tracer.mesh == null or not tracer.mesh is BoxMesh:
@@ -313,18 +313,22 @@ static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_r
 	var trail_count: int = clampi(int(dist * 5.0), 30, 100)
 	var _direction := (end - start).normalized()
 	# 武器粒子外观
-	var particle_size: float = 0.025
+	var particle_size: float = 0.035
 	var base_color := Color(1.0, 0.6, 0.1)
 	match weapon_id:
+		&"smg_short":
+			particle_size = 0.02
 		&"shotgun_cqc":
-			particle_size = 0.04
+			particle_size = 0.07
 			base_color = Color(1.0, 0.5, 0.1)
-		&"dmr_long":
+		&"ar_medium":
 			particle_size = 0.035
+		&"dmr_long":
+			particle_size = 0.06
 			base_color = Color(1.0, 0.9, 0.6)
 		&"sniper_disc":
-			particle_size = 0.045
-			base_color = Color(0.3, 0.6, 1.0)  # 蓝色 Volt 能量
+			particle_size = 0.08
+			base_color = Color(0.3, 0.6, 1.0)
 	for i in trail_count:
 		var t: float = float(i + 1) / float(trail_count + 1)
 		var pos := start.lerp(end, t)
