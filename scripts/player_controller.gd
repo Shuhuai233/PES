@@ -191,7 +191,7 @@ var _current_weapon_id: StringName = &""
 
 # 弹道 Debug
 var _ballistic_debug: bool = false
-var _debug_lines: Array[MeshInstance3D] = []
+var _debug_lines: Array = []
 const DEBUG_LINE_MAX := 30
 var _scope_overlay: ColorRect = null  # 狙击镜黑边遮罩
 
@@ -751,10 +751,9 @@ func _fire_shotgun_pellets() -> void:
 		else:
 			hit_point = camera.global_position + camera.global_basis * raycast.target_position
 		if i == 0:
-	VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger())
-	# 弹道 Debug
-	var ray_start := camera.global_position if camera else global_position
-	_draw_debug_ray(ray_start, hit_point, raycast != null and raycast.is_colliding())
+			VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger())
+			var ray_start := camera.global_position if camera else global_position
+			_draw_debug_ray(ray_start, hit_point, raycast != null and raycast.is_colliding())
 
 # ─────────────────────────────────────────────
 # 枪械动画
@@ -846,11 +845,12 @@ func _flash_muzzle() -> void:
 		await get_tree().create_timer(muzzle_flash_duration).timeout
 		if is_instance_valid(muzzle_flash):
 			muzzle_flash.visible = false
-	# 枪口火焰：挂在 gun_pivot 上，用枪口在 pivot 本地空间的位置
-	var muzzle_in_pivot := _get_muzzle_pivot_pos()
-	VFX.spawn_muzzle_flash_fx(
-		_get_muzzle_world_pos(), camera.global_basis, get_tree().current_scene,
-		gun_pivot, muzzle_in_pivot)
+	# 枪口火焰：挂在 gun_pivot 上
+	if camera and gun_pivot:
+		var muzzle_in_pivot := _get_muzzle_pivot_pos()
+		VFX.spawn_muzzle_flash_fx(
+			_get_muzzle_world_pos(), camera.global_basis, get_tree().current_scene,
+			gun_pivot, muzzle_in_pivot)
 
 ## 根据武器类型返回弹道火光残留时间
 func _get_trail_linger() -> float:
