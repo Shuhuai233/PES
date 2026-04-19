@@ -228,12 +228,37 @@ func _place_cover_point(pos: Vector3, facing: Vector3, cover_type: String, index
 	var marker := Node3D.new()
 	marker.name = "CP_%04d" % (get_child_count() + index)
 	marker.position = pos
+	# Orient the node so -Z points toward the obstacle (facing direction)
+	if facing.length() > 0.01:
+		var look_target: Vector3 = pos + facing
+		look_target.y = pos.y
+		marker.look_at_from_position(pos, look_target, Vector3.UP)
 	# Store metadata for AI to read
 	marker.set_meta("cover_type", cover_type)  # "half" or "full"
-	marker.set_meta("facing", facing)           # direction the cover faces (toward obstacle)
+	marker.set_meta("facing", facing)           # direction toward the obstacle
 	add_child(marker)
 	# Set owner so it saves with the scene
 	var scene_root := get_tree().edited_scene_root
 	if scene_root:
 		marker.owner = scene_root
-	marker.add_to_group("cover_point", true)  # persistent=true so it saves in .tscn
+	marker.add_to_group("cover_point", true)
+
+	# Editor-only debug arrow (small mesh showing facing direction)
+	if Engine.is_editor_hint():
+		var arrow := MeshInstance3D.new()
+		arrow.name = "DebugArrow"
+		var box := BoxMesh.new()
+		box.size = Vector3(0.08, 0.08, 0.4)
+		arrow.mesh = box
+		# Arrow points along -Z (local), shifted forward
+		arrow.position = Vector3(0, 0.3, -0.2)
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		if cover_type == "full":
+			mat.albedo_color = Color(0.2, 0.5, 1.0, 0.9)  # blue = full cover
+		else:
+			mat.albedo_color = Color(1.0, 0.8, 0.1, 0.9)  # yellow = half cover
+		arrow.set_surface_override_material(0, mat)
+		marker.add_child(arrow)
+		if scene_root:
+			arrow.owner = scene_root

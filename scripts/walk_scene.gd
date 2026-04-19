@@ -439,17 +439,33 @@ func _refresh_cover_debug_colors() -> void:
 			var s: float = cp.get_meta("last_score")
 			score_text = "\n%.0f" % s
 
+		# Cover type tag
+		var type_tag: String = ""
+		if cp.has_meta("cover_type"):
+			var ct: String = cp.get_meta("cover_type")
+			type_tag = " [%s]" % ct.to_upper()
+
 		if node is MeshInstance3D:
 			var mat := node.get_surface_override_material(0) as StandardMaterial3D
 			if mat:
-				mat.albedo_color = Color(1.0, 0.2, 0.2, 0.8) if is_claimed else Color(0.2, 1.0, 0.2, 0.8)
+				if is_claimed:
+					mat.albedo_color = Color(1.0, 0.2, 0.2, 0.8)
+				else:
+					# Color by cover type: blue=full, yellow=half
+					if cp.has_meta("cover_type") and cp.get_meta("cover_type") == "full":
+						mat.albedo_color = Color(0.2, 0.5, 1.0, 0.8)
+					else:
+						mat.albedo_color = Color(0.2, 1.0, 0.2, 0.8)
 		elif node is Label3D:
 			if is_claimed:
-				node.text = "CLAIMED\n%s%s" % [claimer_name, score_text]
+				node.text = "CLAIMED%s\n%s%s" % [type_tag, claimer_name, score_text]
 				node.modulate = Color(1.0, 0.3, 0.3)
 			else:
-				node.text = "FREE%s" % score_text
-				node.modulate = Color(0.3, 1.0, 0.3)
+				node.text = "FREE%s%s" % [type_tag, score_text]
+				if cp.has_meta("cover_type") and cp.get_meta("cover_type") == "full":
+					node.modulate = Color(0.3, 0.5, 1.0)
+				else:
+					node.modulate = Color(0.3, 1.0, 0.3)
 
 func _clear_cover_debug() -> void:
 	for node in _cover_debug_nodes:

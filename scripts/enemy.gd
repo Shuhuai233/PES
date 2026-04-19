@@ -174,8 +174,21 @@ func _state_seek_cover(delta: float) -> void:
 		_cover_point = _find_best_cover()
 	if _cover_point == null:
 		_no_cover_timer += delta
-		if _no_cover_timer > 3.0: _transition(State.ADVANCE)
-		else: _look_at_player(); velocity.x = 0.0; velocity.z = 0.0
+		# Rusher: advance after 3s with no cover
+		if archetype == 0 and _no_cover_timer > 3.0:
+			_transition(State.ADVANCE)
+		# Standard/Heavy: keep looking, don't rush player
+		elif archetype != 0 and _no_cover_timer > 2.0:
+			# Retry finding cover with larger radius
+			_no_cover_timer = 0.0
+			cover_search_radius = min(cover_search_radius + 5.0, 40.0)
+			_cover_point = _find_best_cover()
+			if _cover_point == null:
+				# Still nothing — hold position, don't advance
+				_look_at_player()
+				velocity.x = 0.0; velocity.z = 0.0
+		else:
+			_look_at_player(); velocity.x = 0.0; velocity.z = 0.0
 		return
 	_no_cover_timer = 0.0
 	if not _nav_target_set:
@@ -465,27 +478,28 @@ func _evaluate_single_cover(cp: Node3D) -> float:
 	if r1 and not r1.collider.is_in_group("player"): score += 20.0
 	else: score -= 15.0
 
-	# 1b. Cover orientation check: the cover point should be on the OPPOSITE
-	# side of the cover object from the player. If the cover point offset
-	# direction aligns with the player direction, the cover is perpendicular
-	# (useless — enemy is exposed from the side).
-	var parent_body := cp.get_parent()
-	if parent_body:
-		var cover_center: Vector3 = parent_body.global_position
-		var cp_offset: Vector3 = (cp_pos - cover_center)
-		cp_offset.y = 0.0
-		var center_to_player: Vector3 = (player_pos - cover_center)
-		center_to_player.y = 0.0
-		if cp_offset.length() > 0.1 and center_to_player.length() > 0.1:
-			var orientation_dot: float = cp_offset.normalized().dot(center_to_player.normalized())
-			# dot < 0 = cover point is on opposite side from player = GOOD (hiding behind)
-			# dot > 0 = cover point is on SAME side as player = BAD (exposed)
-			if orientation_dot < -0.3:
-				score += 10.0  # hiding behind cover, good
-			elif orientation_dot > 0.3:
-				score -= 20.0  # same side as player, terrible
+	# 1b. Cover facing check: use stored facing direction from CoverBuilder
+	# "facing" points TOWARD the obstacle. Good cover = obstacle is between
+	# the cover point and the player, meaning facing direction and
+	# cover-to-player direction should be SIMILAR (dot > 0).
+	if cp.has_meta("facing"):
+		var facing: Vector3 = cp.get_meta("facing")
+		var cp_to_player: Vector3 = (player_pos - cp_pos)
+		cp_to_player.y = 0.0
+		if facing.length() > 0.01 and cp_to_player.length() > 0.01:
+			var facing_dot: float = facing.normalized().dot(cp_to_player.normalized())
+			if facing_dot > 0.3:
+				score += 12.0  # cover faces toward player = obstacle blocks LOS = good
+			elif facing_dot < -0.3:
+				score -= 25.0  # cover faces AWAY from player = exposed = terrible
 			else:
-				score -= 8.0   # perpendicular, cover doesn't protect
+				score -= 10.0  # perpendicular = minimal protection
+
+	# 1c. Cover type bonus
+	if cp.has_meta("cover_type"):
+		var ct: String = cp.get_meta("cover_type")
+		if ct == "full": score += 6.0
+		elif ct == "half": score += 2.0
 
 	# 2. Shoot feasibility from peek
 	var to_player := (player_pos - cp_pos); to_player.y = 0.0; to_player = to_player.normalized()
