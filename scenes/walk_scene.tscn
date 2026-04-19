@@ -12,6 +12,7 @@
 [ext_resource type="PackedScene" path="res://prefabs/cover/Pillar.tscn" id="10_f1diu"]
 [ext_resource type="PackedScene" path="res://prefabs/cover/WallSegmentLarge.tscn" id="11_wf55l"]
 [ext_resource type="PackedScene" path="res://prefabs/cover/CrateSmall.tscn" id="12_xhr7y"]
+[ext_resource type="Script" uid="uid://ckick37t2ujfp" path="res://scripts/cover_builder.gd" id="13_onigh"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.28, 0.24, 0.12, 1)
@@ -358,3 +359,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, 1.7975273)
 
 [node name="Barrier2" parent="." unique_id=1790685814 instance=ExtResource("2_hi074")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.34344518, 0.010218665, 2.1196942)
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1649077561]
+
+[node name="CoverBuilder" type="Node3D" parent="." unique_id=1482850702]
+script = ExtResource("13_onigh")
