@@ -9,7 +9,7 @@ extends Node3D
 @export var spawn_interval: float = 4.0
 @export var max_enemies: int = 12
 @export var spawn_radius: float = 30.0
-@export var spawn_height: float = 0.9
+@export var spawn_height: float = 0.0
 @export var first_spawn_delay: float = 0.5
 
 const ENEMY_SCRIPT := preload("res://scripts/enemy.gd")

@@ -436,10 +436,10 @@ func _build_hud() -> void:
 	# 准星
 	crosshair = Control.new()
 	crosshair.set_anchors_preset(Control.PRESET_CENTER)
-	crosshair.offset_left = -20
-	crosshair.offset_top = -20
-	crosshair.offset_right = 20
-	crosshair.offset_bottom = 20
+	crosshair.offset_left = 0
+	crosshair.offset_top = 0
+	crosshair.offset_right = 0
+	crosshair.offset_bottom = 0
 	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(crosshair)
 	_build_crosshair_nodes()
