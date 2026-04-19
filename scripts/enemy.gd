@@ -274,7 +274,7 @@ func _state_peek_shoot(delta: float) -> void:
 				_peek_shoot_count = 0; _release_cover(); _cover_point = null; _nav_target_set = false
 
 # ═══════════════ RETREAT ═══════════════
-func _state_retreat(delta: float) -> void:
+func _state_retreat(_delta: float) -> void:
 	if _cover_point == null or not is_instance_valid(_cover_point):
 		_transition(State.SEEK_COVER); return
 	if _flat_dist_to(_cover_point.global_position) < 1.2:
@@ -365,14 +365,14 @@ func _spawn_tracer(origin: Vector3, dir: Vector3) -> void:
 	tracer.global_position = origin; tracer.look_at(origin + dir, Vector3.UP)
 	var tween := tracer.create_tween()
 	tween.tween_property(tracer, "global_position", origin + dir * shoot_range, shoot_range / bullet_speed)
-	tween.parallel().tween_property(tracer, "modulate:a", 0.0, 0.3)
+	tween.parallel().tween_property(tracer, "scale", Vector3.ZERO, 0.3)
 	tween.tween_callback(tracer.queue_free)
 
 func _enemy_muzzle_flash() -> void:
 	var flash := OmniLight3D.new()
 	flash.light_color = Color(1.0, 0.7, 0.2); flash.light_energy = 6.0; flash.omni_range = 3.0
-	flash.global_position = global_position + Vector3(0, 1.0, 0)
 	get_tree().current_scene.add_child(flash)
+	flash.global_position = global_position + Vector3(0, 1.0, 0)
 	var tw := flash.create_tween()
 	tw.tween_property(flash, "light_energy", 0.0, 0.08); tw.tween_callback(flash.queue_free)
 

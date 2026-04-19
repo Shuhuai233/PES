@@ -30,7 +30,7 @@ func _ready() -> void:
 	collision_layer = 0
 	collision_mask = 2  # detect player (layer 2)
 	monitoring = true
-	monitorable = false
+	set_deferred("monitorable", false)
 
 	_build_visuals()
 

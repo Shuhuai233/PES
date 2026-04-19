@@ -167,9 +167,9 @@ func _build_ui() -> void:
 	_grid_container = Control.new()
 	_grid_container.set_anchors_preset(Control.PRESET_CENTER)
 	_grid_container.offset_left = 20
-	_grid_container.offset_top = -grid_h_px / 2
+	_grid_container.offset_top = -grid_h_px / 2.0
 	_grid_container.offset_right = 20 + grid_w_px
-	_grid_container.offset_bottom = -grid_h_px / 2 + grid_h_px
+	_grid_container.offset_bottom = -grid_h_px / 2.0 + grid_h_px
 	_grid_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_grid_container)
 
@@ -341,8 +341,8 @@ func _on_inventory_changed(_slot: Variant) -> void:
 # ─────────────────────────────────────────────
 func _mouse_to_grid(mouse_global: Vector2) -> Vector2i:
 	var local := mouse_global - _grid_container.global_position
-	var gx: int = int(local.x) / (CELL_SIZE + CELL_GAP)
-	var gy: int = int(local.y) / (CELL_SIZE + CELL_GAP)
+	var gx: int = int(local.x) / int(CELL_SIZE + CELL_GAP)
+	var gy: int = int(local.y) / int(CELL_SIZE + CELL_GAP)
 	return Vector2i(gx, gy)
 
 func _is_in_grid(mouse_global: Vector2) -> bool:

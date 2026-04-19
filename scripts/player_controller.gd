@@ -1060,11 +1060,11 @@ func _build_scope_overlay() -> void:
 		_scope_overlay.add_child(mask)
 		_scope_masks.append(mask)
 
-func _show_scope_overlay(show: bool) -> void:
+func _show_scope_overlay(show_overlay: bool) -> void:
 	if _scope_overlay == null:
 		return
-	_scope_overlay.visible = show
-	if show:
+	_scope_overlay.visible = show_overlay
+	if show_overlay:
 		_scope_overlay.color = Color(0, 0, 0, 0.85)
 		# 调整遮罩大小形成圆形视野
 		var vp_size := get_viewport().get_visible_rect().size

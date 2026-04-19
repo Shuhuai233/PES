@@ -92,8 +92,8 @@ func _spawn_enemy() -> void:
 	var enemy := _build_enemy()
 	var angle := randf() * TAU
 	var dist := spawn_radius * (0.6 + randf() * 0.4)
-	enemy.global_position = Vector3(cos(angle) * dist, spawn_height, sin(angle) * dist)
 	get_tree().current_scene.add_child(enemy)
+	enemy.global_position = Vector3(cos(angle) * dist, spawn_height, sin(angle) * dist)
 	enemy.died.connect(_on_enemy_died)
 	current_enemies.append(enemy)
 	total_spawned += 1

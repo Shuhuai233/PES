@@ -104,9 +104,9 @@ func _on_loot_picked_up(item: Resource, qty: int) -> void:
 
 func _get_valid_position() -> Vector3:
 	for _attempt in 20:
-		var angle := randf() * TAU
-		var dist := spawn_radius * (0.3 + randf() * 0.7)
-		var pos := Vector3(cos(angle) * dist, 0.1, sin(angle) * dist)
+		var _angle := randf() * TAU
+		var _dist := spawn_radius * (0.3 + randf() * 0.7)
+		var pos := Vector3(cos(_angle) * _dist, 0.1, sin(_angle) * _dist)
 		if _is_far_enough(pos):
 			return pos
 	# Fallback — accept any position

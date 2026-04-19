@@ -361,7 +361,7 @@ func _toggle_navmesh_debug_mesh() -> void:
 		_navmesh_debug_mesh.mesh = arr_mesh
 		_navmesh_debug_mesh.set_surface_override_material(0, mat)
 		add_child(_navmesh_debug_mesh)
-		print("[Debug] NavMesh debug mesh created: %d triangles" % (mesh_verts.size() / 3))
+		print("[Debug] NavMesh debug mesh created: %d triangles" % (mesh_verts.size() / 3.0))
 	else:
 		if _navmesh_debug_mesh != null and is_instance_valid(_navmesh_debug_mesh):
 			_navmesh_debug_mesh.visible = false

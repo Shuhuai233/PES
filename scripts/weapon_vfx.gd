@@ -21,11 +21,11 @@ static func _get_pooled(category: String, scene_root: Node) -> MeshInstance3D:
 	var pool: Array = _pools[category]
 	# Try to find a reusable node
 	while not pool.is_empty():
-		var mi: MeshInstance3D = pool.pop_back()
-		if is_instance_valid(mi):
-			mi.visible = true
-			mi.scale = Vector3.ONE
-			return mi
+		var pooled: MeshInstance3D = pool.pop_back()
+		if is_instance_valid(pooled):
+			pooled.visible = true
+			pooled.scale = Vector3.ONE
+			return pooled
 	# Pool empty — create new
 	var mi := MeshInstance3D.new()
 	mi.name = "VFX_" + category
@@ -284,7 +284,7 @@ static func spawn_tracer(muzzle_pos: Vector3, hit_point: Vector3, scene_root: No
 ## 弹道火光残留（沿路径生成逐渐消失的橙色光点）
 static func _spawn_fire_trail(start: Vector3, end: Vector3, dist: float, scene_root: Node, linger: float = 0.3) -> void:
 	var trail_count: int = clampi(int(dist * 5.0), 30, 100)
-	var direction := (end - start).normalized()
+	var _direction := (end - start).normalized()
 	for i in trail_count:
 		var t: float = float(i + 1) / float(trail_count + 1)
 		var pos := start.lerp(end, t)

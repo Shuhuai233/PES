@@ -152,7 +152,7 @@ func _process(_delta: float) -> void:
 		_push_to_all_materials()
 
 ## Called when any export parameter is changed at runtime (editor inspector).
-func _set(property: StringName, value: Variant) -> bool:
+func _set(property: StringName, _value: Variant) -> bool:
 	# Let Godot handle the actual property assignment, but mark dirty
 	# We only care about our @export parameters, not internal vars
 	if property in [
