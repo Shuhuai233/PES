@@ -188,6 +188,11 @@ var _shake_offset: Vector3 = Vector3.ZERO
 var is_aiming: bool = false
 var ads_alpha: float = 0.0          # 0=hip, 1=fully ADS
 var _current_weapon_id: StringName = &""
+
+# 弹道 Debug
+var _ballistic_debug: bool = false
+var _debug_lines: Array[MeshInstance3D] = []
+const DEBUG_LINE_MAX := 30
 var _scope_overlay: ColorRect = null  # 狙击镜黑边遮罩
 
 # 缓存节点引用（避免每帧 get_node_or_null）
@@ -272,6 +277,11 @@ func _input(event: InputEvent) -> void:
 		if event.is_action_pressed("weapon_slot_%d" % (i + 1)):
 			_equip_quick_slot(i)
 			break
+	# F4: 弹道 Debug 开关
+	if event is InputEventKey and event.pressed and event.keycode == KEY_F4:
+		_ballistic_debug = not _ballistic_debug
+		if not _ballistic_debug:
+			_clear_debug_lines()
 
 # ─────────────────────────────────────────────
 # 主逻辑帧
@@ -741,7 +751,10 @@ func _fire_shotgun_pellets() -> void:
 		else:
 			hit_point = camera.global_position + camera.global_basis * raycast.target_position
 		if i == 0:
-			VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger())
+	VFX.spawn_tracer(_get_muzzle_world_pos(), hit_point, get_tree().current_scene, _get_trail_linger())
+	# 弹道 Debug
+	var ray_start := camera.global_position if camera else global_position
+	_draw_debug_ray(ray_start, hit_point, raycast != null and raycast.is_colliding())
 
 # ─────────────────────────────────────────────
 # 枪械动画
@@ -1139,3 +1152,62 @@ func get_stamina() -> float:
 
 func get_is_crouching() -> bool:
 	return is_crouching
+
+# ─────────────────────────────────────────────
+# 弹道 Debug（F4 开关）
+# ─────────────────────────────────────────────
+func _draw_debug_ray(start: Vector3, end: Vector3, hit: bool) -> void:
+	if not _ballistic_debug:
+		return
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+
+	# 射线（细长方块从 start 到 end）
+	var dir := end - start
+	var dist := dir.length()
+	if dist < 0.1:
+		return
+	var line := MeshInstance3D.new()
+	var lm := BoxMesh.new()
+	lm.size = Vector3(0.003, 0.003, dist)
+	line.mesh = lm
+	# 命中敌人=红线，命中墙面=黄线，未命中=青线
+	var col := Color.RED if hit else Color.YELLOW
+	line.set_surface_override_material(0, PSXManager.make_psx_material(col))
+	scene.add_child(line)
+	line.global_position = start + dir * 0.5
+	line.look_at(end, Vector3.UP)
+
+	# 命中点标记球
+	var marker := MeshInstance3D.new()
+	var mm := BoxMesh.new()
+	mm.size = Vector3(0.04, 0.04, 0.04)
+	marker.mesh = mm
+	var marker_col := Color.RED if hit else Color.YELLOW
+	marker.set_surface_override_material(0, PSXManager.make_psx_material(marker_col))
+	scene.add_child(marker)
+	marker.global_position = end
+
+	# 跟踪并限制数量
+	_debug_lines.append(line)
+	_debug_lines.append(marker)
+	while _debug_lines.size() > DEBUG_LINE_MAX * 2:
+		var old := _debug_lines.pop_front()
+		if is_instance_valid(old):
+			old.queue_free()
+
+	# 5 秒后自动清除
+	var tw := line.create_tween()
+	tw.tween_interval(5.0)
+	tw.tween_callback(func():
+		if is_instance_valid(line): line.queue_free()
+		if is_instance_valid(marker): marker.queue_free()
+		_debug_lines.erase(line)
+		_debug_lines.erase(marker))
+
+func _clear_debug_lines() -> void:
+	for obj in _debug_lines:
+		if is_instance_valid(obj):
+			obj.queue_free()
+	_debug_lines.clear()

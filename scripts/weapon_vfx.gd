@@ -196,20 +196,26 @@ static func spawn_bullet_hole(hit_pos: Vector3, hit_normal: Vector3, scene_root:
 	var hole := MeshInstance3D.new()
 	hole.name = "BulletHole"
 	var cm := CylinderMesh.new()
-	cm.top_radius = 0.025; cm.bottom_radius = 0.03; cm.height = 0.004
+	cm.top_radius = 0.04; cm.bottom_radius = 0.05; cm.height = 0.005
 	hole.mesh = cm
-	hole.set_surface_override_material(0, _get_mat(Color(0.02, 0.02, 0.02)))
+	hole.set_surface_override_material(0, _get_mat(Color(0.01, 0.01, 0.01)))
 	scene_root.add_child(hole)
-	hole.global_position = hit_pos + hit_normal * 0.002
-	if hit_normal.abs() != Vector3.UP:
+	hole.global_position = hit_pos + hit_normal * 0.003
+	# 旋转贴合表面（安全的法线朝向计算）
+	if absf(hit_normal.y) < 0.99:
+		# 非水平面（墙壁/斜面）
 		hole.look_at(hit_pos + hit_normal, Vector3.UP)
 		hole.rotate_object_local(Vector3.RIGHT, deg_to_rad(90))
 	else:
-		hole.rotation_degrees.x = 0 if hit_normal.y > 0 else 180
+		# 水平面（地板/天花板）
+		if hit_normal.y > 0:
+			hole.rotation_degrees = Vector3.ZERO
+		else:
+			hole.rotation_degrees = Vector3(180, 0, 0)
 	# Scorch ring
 	var scorch := MeshInstance3D.new()
 	var sm := CylinderMesh.new()
-	sm.top_radius = 0.045; sm.bottom_radius = 0.05; sm.height = 0.002
+	sm.top_radius = 0.06; sm.bottom_radius = 0.07; sm.height = 0.003
 	scorch.mesh = sm
 	scorch.set_surface_override_material(0, _get_mat(Color(0.06, 0.05, 0.04)))
 	hole.add_child(scorch)
