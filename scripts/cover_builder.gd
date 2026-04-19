@@ -137,7 +137,7 @@ func _find_obstacles(root: Node) -> Array:
 
 func _scan_node(node: Node, results: Array) -> void:
 	if node is StaticBody3D:
-		var data := _analyze_static_body(node as StaticBody3D)
+		var data: Variant = _analyze_static_body(node as StaticBody3D)
 		if data != null:
 			results.append(data)
 	for child in node.get_children():
