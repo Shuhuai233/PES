@@ -917,12 +917,12 @@ func equip_weapon(item: Resource) -> void:
 	equipped_weapon_name = item.display_name
 	_current_weapon_id = item.id
 	# 根据武器瞄具高度计算 ADS 位置（瞄具中心对齐屏幕中心 Y=0）
-	var ads_y: float = -0.17  # 默认（铁瞄，sight_top=0.16 + dot 0.01）
+	var ads_y: float = -0.13  # 默认（红点瞄具）
 	match _current_weapon_id:
-		&"shotgun_cqc": ads_y = -0.17
-		&"smg_short": ads_y = -0.17
-		&"ar_medium": ads_y = -0.13   # 红点中心（rail 0.08 + frame_h/2 0.045）
-		&"dmr_long": ads_y = -0.11    # 光学瞄准镜中心
+		&"shotgun_cqc": ads_y = -0.145  # 红点 rail_y=0.10 较高
+		&"smg_short": ads_y = -0.13    # 红点 rail_y=0.08
+		&"ar_medium": ads_y = -0.13    # 红点 rail_y=0.08
+		&"dmr_long": ads_y = -0.12    # 红点 rail_y=0.07
 		&"sniper_disc": ads_y = -0.115
 	_gun_ads_pos = Vector3(GUN_ADS_X, ads_y, GUN_ADS_Z)
 	ammo_changed.emit(current_ammo, magazine_size)
@@ -977,19 +977,13 @@ func _update_ads(delta: float) -> void:
 	if _ui_node_cache and _ui_node_cache.has_method("update_ads_visuals"):
 		_ui_node_cache.update_ads_visuals(ads_alpha)
 
-	# 狙击镜/DMR ADS 时隐藏整个枪模（用 scope overlay 代替）
+	# 狙击镜 ADS 时隐藏枪模用 scope overlay；其他武器保持枪模可见
 	if _is_sniper():
 		if ads_alpha > 0.85:
 			_show_scope_overlay(true)
 			if gun_pivot: gun_pivot.visible = false
 		else:
 			_show_scope_overlay(false)
-			if gun_pivot: gun_pivot.visible = true
-	elif _current_weapon_id == &"dmr_long":
-		# DMR ADS 时也隐藏枪模，用简化的瞄准视图
-		if ads_alpha > 0.85:
-			if gun_pivot: gun_pivot.visible = false
-		else:
 			if gun_pivot: gun_pivot.visible = true
 	else:
 		_show_scope_overlay(false)

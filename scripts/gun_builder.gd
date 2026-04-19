@@ -266,7 +266,7 @@ static func _make_gun_shotgun(gun_pivot: Node3D) -> MeshInstance3D:
 	grip.rotation_degrees = Vector3(-15, 0, 0)
 	grip.set_surface_override_material(0, gun_mat(col.darkened(0.4)))
 	gun_pivot.add_child(grip)
-	_add_iron_sights(gun_pivot, -0.24, 0.10, 0.10)
+	_add_red_dot_sight(gun_pivot, 0.10)
 	_add_arms(gun_pivot, Vector3(0, -0.06, -0.18), Vector3(0, -0.10, 0.13))
 	return body
 
@@ -310,7 +310,7 @@ static func _make_gun_smg(gun_pivot: Node3D) -> MeshInstance3D:
 	grip.rotation_degrees = Vector3(-12, 0, 0)
 	grip.set_surface_override_material(0, gun_mat(Color(0.12, 0.12, 0.12)))
 	gun_pivot.add_child(grip)
-	_add_iron_sights(gun_pivot, -0.20, 0.08, 0.08)
+	_add_red_dot_sight(gun_pivot, 0.08)
 	_add_arms(gun_pivot, Vector3(0, -0.04, -0.10), Vector3(0, -0.08, 0.11))
 	return body
 
@@ -384,43 +384,8 @@ static func _make_gun_dmr(gun_pivot: Node3D) -> MeshInstance3D:
 	barrel.position = Vector3(0, 0.01, -0.57)
 	barrel.set_surface_override_material(0, gun_mat(Color(0.06, 0.06, 0.06)))
 	gun_pivot.add_child(barrel)
-	# 瞄准镜 — 空心管
-	var scope_top := MeshInstance3D.new()
-	scope_top.name = "ScopeTop"
-	var st_m := BoxMesh.new()
-	st_m.size = Vector3(0.076, 0.008, 0.22)
-	scope_top.mesh = st_m
-	scope_top.position = Vector3(0, 0.14, -0.09)
-	scope_top.set_surface_override_material(0, gun_mat(Color(0.05, 0.05, 0.05)))
-	scope_top.sorting_offset = 0.1
-	gun_pivot.add_child(scope_top)
-	var scope_bot := MeshInstance3D.new()
-	scope_bot.name = "ScopeBot"
-	var sb_m := BoxMesh.new()
-	sb_m.size = Vector3(0.076, 0.008, 0.22)
-	scope_bot.mesh = sb_m
-	scope_bot.position = Vector3(0, 0.08, -0.09)
-	scope_bot.set_surface_override_material(0, gun_mat(Color(0.05, 0.05, 0.05)))
-	scope_bot.sorting_offset = 0.1
-	gun_pivot.add_child(scope_bot)
-	var scope_l := MeshInstance3D.new()
-	scope_l.name = "ScopeL"
-	var sl_m := BoxMesh.new()
-	sl_m.size = Vector3(0.008, 0.06, 0.22)
-	scope_l.mesh = sl_m
-	scope_l.position = Vector3(-0.034, 0.11, -0.09)
-	scope_l.set_surface_override_material(0, gun_mat(Color(0.05, 0.05, 0.05)))
-	scope_l.sorting_offset = 0.1
-	gun_pivot.add_child(scope_l)
-	var scope_r := MeshInstance3D.new()
-	scope_r.name = "ScopeR"
-	var sr_m := BoxMesh.new()
-	sr_m.size = Vector3(0.008, 0.06, 0.22)
-	scope_r.mesh = sr_m
-	scope_r.position = Vector3(0.034, 0.11, -0.09)
-	scope_r.set_surface_override_material(0, gun_mat(Color(0.05, 0.05, 0.05)))
-	scope_r.sorting_offset = 0.1
-	gun_pivot.add_child(scope_r)
+	# 红点瞄具（和 AR 一样的 Marathon 风格）
+	_add_red_dot_sight(gun_pivot, 0.07)
 	var mag := MeshInstance3D.new()
 	var mm := BoxMesh.new()
 	mm.size = Vector3(0.048, 0.18, 0.055)

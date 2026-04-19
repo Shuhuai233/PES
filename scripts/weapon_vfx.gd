@@ -336,6 +336,7 @@ static func spawn_charge_ring(gun_pivot: Node3D, sniper_charge: float) -> void:
 		edge.mesh = em
 		edge.position = data[0]
 		edge.set_surface_override_material(0, mat)
+		edge.sorting_offset = 0.5  # 渲染在枪身和瞄具之上
 		ring.add_child(edge)
 
 	var glow_light := OmniLight3D.new()

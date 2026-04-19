@@ -114,14 +114,24 @@ func _build_enemy() -> CharacterBody3D:
 	root.collision_layer = 4   # layer 3 (enemies)
 	root.collision_mask = 3    # layer 1 (floor) + 2 (player)
 
-	# Collision capsule
+	# Body collision capsule (shifted up to cover torso)
 	var col := CollisionShape3D.new()
 	col.name = "CollisionShape3D"
 	var cap := CapsuleShape3D.new()
 	cap.radius = 0.32
-	cap.height = 1.6
+	cap.height = 1.2
 	col.shape = cap
+	col.position = Vector3(0, 0.55, 0)  # 居中在躯干
 	root.add_child(col)
+
+	# Head collision sphere (单独碰撞体，覆盖头部)
+	var head_col := CollisionShape3D.new()
+	head_col.name = "HeadCollision"
+	var head_sphere := SphereShape3D.new()
+	head_sphere.radius = 0.22
+	head_col.shape = head_sphere
+	head_col.position = Vector3(0, 1.10, 0)  # 头部位置
+	root.add_child(head_col)
 
 	# Color variant + stats
 	var variant_idx := randi() % COLOR_VARIANTS.size()
