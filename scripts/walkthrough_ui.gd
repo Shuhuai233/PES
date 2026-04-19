@@ -547,9 +547,20 @@ func update_ads_visuals(ads_alpha: float) -> void:
 	# 暗角随 ADS 渐入
 	if ads_vignette:
 		ads_vignette.color.a = ads_alpha * 0.12
-	# ADS 时准心保持完全可见（准心 = 实际射击位置，必须清晰可读）
+	# ADS 时：十字线淡出，只留中心小点（对齐瞄具红点）
+	# Hip-fire 时：完整十字准心
 	if crosshair:
-		crosshair.modulate.a = 1.0
+		var lines_alpha: float = 1.0 - ads_alpha  # 十字线随 ADS 消失
+		if _ch_top: _ch_top.modulate.a = lines_alpha
+		if _ch_bot: _ch_bot.modulate.a = lines_alpha
+		if _ch_left: _ch_left.modulate.a = lines_alpha
+		if _ch_right: _ch_right.modulate.a = lines_alpha
+		# 中心点始终可见，ADS 时变小变亮
+		if _ch_dot:
+			_ch_dot.modulate.a = 1.0
+			var dot_size: float = lerpf(3.0, 2.0, ads_alpha)
+			_ch_dot.size = Vector2(dot_size, dot_size)
+			_ch_dot.position = Vector2(-dot_size * 0.5, -dot_size * 0.5)
 
 # ─────────────────────────────────────────────
 # 教程显示
