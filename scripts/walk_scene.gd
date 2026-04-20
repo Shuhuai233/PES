@@ -413,7 +413,11 @@ func _toggle_cover_debug() -> void:
 			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			mat.albedo_color = Color(0.2, 1.0, 0.2, 0.8)
 			marker.set_surface_override_material(0, mat)
-			marker.global_position = cp.global_position + Vector3(0, 1.5, 0)
+			# Height based on cover type: half=0.7m (crouch), full=1.4m (stand)
+			var debug_height: float = 0.7
+			if cp.has_meta("cover_type") and cp.get_meta("cover_type") == "full":
+				debug_height = 1.4
+			marker.global_position = cp.global_position + Vector3(0, debug_height, 0)
 			add_child(marker)
 			_cover_debug_nodes.append(marker)
 
@@ -424,7 +428,7 @@ func _toggle_cover_debug() -> void:
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 			label.font_size = 22
 			label.no_depth_test = true
-			label.global_position = cp.global_position + Vector3(0, 2.1, 0)
+			label.global_position = cp.global_position + Vector3(0, debug_height + 0.5, 0)
 			label.text = "FREE"
 			label.modulate = Color(0.3, 1.0, 0.3)
 			add_child(label)
@@ -498,7 +502,6 @@ func _clear_cover_debug() -> void:
 func _toggle_free_cam() -> void:
 	_free_cam = not _free_cam
 	if _free_cam:
-		# Create free camera at player camera position
 		if _free_cam_node == null:
 			_free_cam_node = Camera3D.new()
 			_free_cam_node.name = "FreeCam"
@@ -507,16 +510,20 @@ func _toggle_free_cam() -> void:
 			add_child(_free_cam_node)
 		_free_cam_node.global_transform = player.get_node("Head/Camera3D").global_transform
 		_free_cam_node.current = true
-		# Extract yaw/pitch from current rotation
 		_free_cam_yaw = _free_cam_node.global_rotation.y
 		_free_cam_pitch = _free_cam_node.global_rotation.x
-		# Disable player movement
+		# Fully disable player (physics + input processing)
 		player.set_physics_process(false)
-		print("[Debug] Free camera ON (F5 to return, WASD+mouse to fly, Shift=fast)")
+		player.set_process_unhandled_input(false)
+		player.set_process_input(false)
+		player.set_process(false)
+		print("[Debug] Free camera ON (F5=return, WASD+mouse, Shift=fast, E/Space=up, Q/Ctrl=down)")
 	else:
-		# Return to player camera
 		player.get_node("Head/Camera3D").current = true
 		player.set_physics_process(true)
+		player.set_process_unhandled_input(true)
+		player.set_process_input(true)
+		player.set_process(true)
 		print("[Debug] Free camera OFF")
 
 func _process_free_cam(delta: float) -> void:

@@ -42,7 +42,7 @@ extends CharacterBody3D
 # ─────────────────────────────────────────────
 # State machine
 # ─────────────────────────────────────────────
-enum State { SEEK_COVER, IN_COVER, PEEK_SHOOT, ADVANCE, RETREAT, FLANK }
+enum State { SEEK_COVER, IN_COVER, PEEK_OUT, PEEK_SHOOT, PEEK_RETURN, ADVANCE, RETREAT, FLANK }
 var state: State = State.SEEK_COVER
 
 # ─────────────────────────────────────────────
@@ -55,6 +55,8 @@ var fireteam: int = 0
 var _player: Node3D = null
 var _cover_point: Node3D = null
 var _peek_dir: Vector3 = Vector3.RIGHT
+var _peek_pos: Vector3 = Vector3.ZERO   ## calculated position to lean out to
+var _aim_timer: float = 0.0             ## aim delay before shooting
 var _cover_timer: float = 0.0
 var _burst_remaining: int = 0
 var _burst_timer: float = 0.0
@@ -154,7 +156,9 @@ func _physics_process(delta: float) -> void:
 	match state:
 		State.SEEK_COVER: _state_seek_cover(delta)
 		State.IN_COVER:   _state_in_cover(delta)
+		State.PEEK_OUT:   _state_peek_out(delta)
 		State.PEEK_SHOOT: _state_peek_shoot(delta)
+		State.PEEK_RETURN: _state_peek_return(delta)
 		State.ADVANCE:    _state_advance(delta)
 		State.RETREAT:    _state_retreat(delta)
 		State.FLANK:      _state_flank(delta)
@@ -198,9 +202,8 @@ func _state_seek_cover(delta: float) -> void:
 
 # ═══════════════ IN_COVER (decision hub) ═══════════════
 func _state_in_cover(delta: float) -> void:
-	velocity.x = move_toward(velocity.x, 0.0, speed * 4.0 * delta)
-	velocity.z = move_toward(velocity.z, 0.0, speed * 4.0 * delta)
-	_look_at_player()
+	# Anchored behind cover — no movement, no aiming at player
+	velocity.x = 0.0; velocity.z = 0.0
 
 	# SETUP: just hide
 	if _sm and _sm.is_setup_phase(): return
@@ -224,8 +227,7 @@ func _state_in_cover(delta: float) -> void:
 			var dist_to_player := _flat_dist_to(_player.global_position)
 			if dist_to_player < shoot_range and _sm and _sm.request_engagement_slot(self):
 				_compute_peek_direction()
-				_peek_timer = peek_duration; _burst_remaining = burst_count; _burst_timer = 0.0
-				_transition(State.PEEK_SHOOT)
+				_transition(State.PEEK_OUT)
 				return
 			# Only melee if player walks into us (reactive, not proactive)
 			if dist_to_player < melee_range:
@@ -241,8 +243,7 @@ func _state_in_cover(delta: float) -> void:
 		_slot_request_timer = 0.5
 		if _sm and _sm.request_engagement_slot(self):
 			_compute_peek_direction()
-			_peek_timer = peek_duration; _burst_remaining = burst_count; _burst_timer = 0.0
-			_bark("COVERING!"); _transition(State.PEEK_SHOOT); return
+			_bark("COVERING!"); _transition(State.PEEK_OUT); return
 
 	# 2. Grenade
 	if has_grenade and _grenade_cooldown <= 0.0 and _sm and _sm.should_throw_grenade():
@@ -274,17 +275,33 @@ func _state_in_cover(delta: float) -> void:
 				_release_cover(); _cover_point = new_best; _nav_target_set = false
 				_transition(State.SEEK_COVER); return
 
-# ═══════════════ PEEK_SHOOT ═══════════════
+# ═══════════════ PEEK_OUT (move to peek position, no aiming) ═══════════════
+func _state_peek_out(delta: float) -> void:
+	# Move toward peek position (don't look at player yet)
+	var dist := _flat_dist_to(_peek_pos)
+	if dist < 0.15:
+		# Arrived at peek position → start shooting
+		velocity.x = 0.0; velocity.z = 0.0
+		_aim_timer = 0.3  # aim delay
+		_burst_remaining = burst_count
+		_burst_timer = 0.0
+		_transition(State.PEEK_SHOOT)
+		return
+	var dir := _flat_dir_to(_peek_pos)
+	velocity.x = dir.x * speed * 3.0
+	velocity.z = dir.z * speed * 3.0
+
+# ═══════════════ PEEK_SHOOT (stationary, aim and fire) ═══════════════
 func _state_peek_shoot(delta: float) -> void:
-	_look_at_player()
-	if _cover_point and is_instance_valid(_cover_point):
-		var target_pos := _cover_point.global_position + _peek_dir * peek_side_offset
-		var dir := _flat_dir_to(target_pos)
-		var dist := _flat_dist_to(target_pos)
-		if dist > 0.2: velocity.x = dir.x * speed * 2.0; velocity.z = dir.z * speed * 2.0
-		else: velocity.x = move_toward(velocity.x, 0.0, speed * 4.0 * delta); velocity.z = move_toward(velocity.z, 0.0, speed * 4.0 * delta)
-	_peek_timer -= delta
-	if _peek_timer > 0.0: return
+	# Anchored at peek position — no movement
+	velocity.x = 0.0; velocity.z = 0.0
+	# Smooth rotation toward player
+	_smooth_look_at_player(delta)
+	# Aim delay before first shot
+	if _aim_timer > 0.0:
+		_aim_timer -= delta
+		return
+	# Fire burst
 	_burst_timer -= delta
 	if _burst_timer <= 0.0 and _burst_remaining > 0:
 		_fire_at_player(); _burst_remaining -= 1; _burst_timer = burst_interval
@@ -295,9 +312,23 @@ func _state_peek_shoot(delta: float) -> void:
 			_burst_remaining = burst_count; _burst_timer = 1.0
 		else:
 			if archetype == 2: _peek_shoot_count = 0
-			_transition(State.RETREAT)
+			_transition(State.PEEK_RETURN)
 			if _peek_shoot_count >= 5 and randf() < 0.15:
 				_peek_shoot_count = 0; _release_cover(); _cover_point = null; _nav_target_set = false
+
+# ═══════════════ PEEK_RETURN (move back to cover, no aiming) ═══════════════
+func _state_peek_return(delta: float) -> void:
+	if _cover_point == null or not is_instance_valid(_cover_point):
+		_transition(State.SEEK_COVER); return
+	var cover_pos := _cover_point.global_position
+	var dist := _flat_dist_to(cover_pos)
+	if dist < 0.15:
+		velocity.x = 0.0; velocity.z = 0.0
+		_transition(State.IN_COVER)
+		return
+	var dir := _flat_dir_to(cover_pos)
+	velocity.x = dir.x * speed * 3.0
+	velocity.z = dir.z * speed * 3.0
 
 # ═══════════════ RETREAT ═══════════════
 func _state_retreat(_delta: float) -> void:
@@ -606,11 +637,23 @@ func _release_cover() -> void:
 		if _cover_point.get_meta("claimed_by") == self: _cover_point.remove_meta("claimed_by")
 
 func _compute_peek_direction() -> void:
-	if _player == null or _cover_point == null: _peek_dir = Vector3.RIGHT; return
+	if _player == null or _cover_point == null:
+		_peek_dir = Vector3.RIGHT
+		_peek_pos = global_position + Vector3.RIGHT
+		return
 	var to_player := (_player.global_position - _cover_point.global_position)
 	to_player.y = 0.0; to_player = to_player.normalized()
 	if randf() > 0.5: _peek_dir = Vector3(-to_player.z, 0, to_player.x)
 	else: _peek_dir = Vector3(to_player.z, 0, -to_player.x)
+	_peek_pos = _cover_point.global_position + _peek_dir * peek_side_offset
+	_peek_pos.y = global_position.y
+
+func _smooth_look_at_player(delta: float) -> void:
+	if _player == null: return
+	var target := Vector3(_player.global_position.x, global_position.y, _player.global_position.z)
+	if global_position.distance_squared_to(target) < 0.001: return
+	var target_transform := global_transform.looking_at(target, Vector3.UP)
+	global_transform = global_transform.interpolate_with(target_transform, clamp(delta * 8.0, 0.0, 1.0))
 
 # ─────────────────────────────────────────────
 # State transitions
@@ -626,7 +669,9 @@ func _transition(new_state: State) -> void:
 			var time_mult := 1.5 if archetype == 2 else 1.0
 			_cover_timer = randf_range(min_cover_time, max_cover_time) * time_mult
 			_slot_request_timer = randf_range(0.3, 0.8); _cover_eval_timer = 10.0
-		State.PEEK_SHOOT: _peek_timer = peek_duration; _burst_remaining = burst_count; _burst_timer = 0.0
+		State.PEEK_OUT: pass  # peek_pos already computed
+		State.PEEK_SHOOT: _aim_timer = 0.3; _burst_remaining = burst_count; _burst_timer = 0.0
+		State.PEEK_RETURN: pass
 		State.ADVANCE: _advance_shoot_timer = randf_range(0.3, 0.8)
 		State.FLANK: _no_cover_timer = 0.0
 
@@ -699,7 +744,8 @@ func _look_at_player() -> void:
 const ARCHETYPE_NAMES := ["RUSH", "STD", "HVY"]
 const STATE_COLORS := {
 	"SEEK_COVER": Color.YELLOW, "IN_COVER": Color.GREEN,
-	"PEEK_SHOOT": Color.ORANGE, "ADVANCE": Color.RED,
+	"PEEK_OUT": Color(1.0, 0.6, 0.2), "PEEK_SHOOT": Color.ORANGE,
+	"PEEK_RETURN": Color(0.8, 0.6, 0.3), "ADVANCE": Color.RED,
 	"RETREAT": Color.CYAN, "FLANK": Color.MAGENTA,
 }
 
