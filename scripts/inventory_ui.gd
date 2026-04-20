@@ -39,7 +39,6 @@ var _pickup_timer: float = 0.0
 
 signal ui_opened()
 signal ui_closed()
-signal weapon_equip_requested(slot: Variant)
 
 # ─────────────────────────────────────────────
 func _ready() -> void:
@@ -341,8 +340,10 @@ func _on_inventory_changed(_slot: Variant) -> void:
 # ─────────────────────────────────────────────
 func _mouse_to_grid(mouse_global: Vector2) -> Vector2i:
 	var local := mouse_global - _grid_container.global_position
-	var gx: int = int(local.x) / int(CELL_SIZE + CELL_GAP)
-	var gy: int = int(local.y) / int(CELL_SIZE + CELL_GAP)
+	@warning_ignore("integer_division")
+	var gx: int = int(local.x) / (CELL_SIZE + CELL_GAP)
+	@warning_ignore("integer_division")
+	var gy: int = int(local.y) / (CELL_SIZE + CELL_GAP)
 	return Vector2i(gx, gy)
 
 func _is_in_grid(mouse_global: Vector2) -> bool:

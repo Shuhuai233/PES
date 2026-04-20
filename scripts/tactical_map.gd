@@ -37,12 +37,12 @@ func _draw() -> void:
 	# Grid (10m spacing)
 	for i in range(-4, 5):
 		var offset: float = float(i) * 10.0
-		var p1: Vector2 = _world_to_map(center + Vector3(offset, 0, -WORLD_RANGE), center)
-		var p2: Vector2 = _world_to_map(center + Vector3(offset, 0, WORLD_RANGE), center)
-		draw_line(p1, p2, GRID_COLOR, 1.0)
-		var p3: Vector2 = _world_to_map(center + Vector3(-WORLD_RANGE, 0, offset), center)
-		var p4: Vector2 = _world_to_map(center + Vector3(WORLD_RANGE, 0, offset), center)
-		draw_line(p3, p4, GRID_COLOR, 1.0)
+		var gv1: Vector2 = _world_to_map(center + Vector3(offset, 0, -WORLD_RANGE), center)
+		var gv2: Vector2 = _world_to_map(center + Vector3(offset, 0, WORLD_RANGE), center)
+		draw_line(gv1, gv2, GRID_COLOR, 1.0)
+		var gh1: Vector2 = _world_to_map(center + Vector3(-WORLD_RANGE, 0, offset), center)
+		var gh2: Vector2 = _world_to_map(center + Vector3(WORLD_RANGE, 0, offset), center)
+		draw_line(gh1, gh2, GRID_COLOR, 1.0)
 
 	# Cover points
 	var covers := get_tree().get_nodes_in_group("cover_point")
@@ -114,12 +114,12 @@ func _draw() -> void:
 	draw_polygon(PackedVector2Array([p0, p1, p2]), PackedColorArray([Color.WHITE, Color.WHITE, Color.WHITE]))
 
 	# Phase indicator
-	if get_node_or_null("/root/SquadManager"):
-		var sm = get_node_or_null("/root/SquadManager")
+	var sm_phase = get_node_or_null("/root/SquadManager")
+	if sm_phase:
 		var phase_names := ["IDLE", "SETUP", "ENGAGE", "PUSH", "FALLBACK"]
-		var phase_text: String = phase_names[sm.phase]
+		var phase_text: String = phase_names[sm_phase.phase]
 		var phase_color := Color.WHITE
-		match sm.phase:
+		match sm_phase.phase:
 			1: phase_color = Color.YELLOW
 			2: phase_color = Color.GREEN
 			3: phase_color = Color.RED

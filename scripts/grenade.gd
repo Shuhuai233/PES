@@ -24,12 +24,17 @@ func launch(target_pos: Vector3, dmg: int = 25, rad: float = 4.0) -> void:
 	tween.tween_callback(_explode)
 
 func _explode() -> void:
+	if not is_inside_tree():
+		queue_free()
+		return
+	var explode_pos := global_position
+
 	# Flash
 	var flash := OmniLight3D.new()
 	flash.light_color = Color(1.0, 0.5, 0.1)
 	flash.light_energy = 15.0
 	flash.omni_range = radius * 2.5
-	flash.global_position = global_position
+	flash.global_position = explode_pos
 	get_tree().current_scene.add_child(flash)
 	var tw := flash.create_tween()
 	tw.tween_property(flash, "light_energy", 0.0, 0.5)
@@ -49,7 +54,7 @@ func _explode() -> void:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	explosion.set_surface_override_material(0, mat)
-	explosion.global_position = global_position
+	explosion.global_position = explode_pos
 	get_tree().current_scene.add_child(explosion)
 	var tw2 := explosion.create_tween()
 	tw2.tween_property(explosion, "scale", Vector3(3, 3, 3), 0.3)
@@ -60,7 +65,7 @@ func _explode() -> void:
 	var players := get_tree().get_nodes_in_group(_player_group)
 	for p in players:
 		if not is_instance_valid(p): continue
-		var dist: float = p.global_position.distance_to(global_position)
+		var dist: float = p.global_position.distance_to(explode_pos)
 		if dist < radius:
 			var falloff: float = 1.0 - (dist / radius)
 			# Find walk_scene to apply damage

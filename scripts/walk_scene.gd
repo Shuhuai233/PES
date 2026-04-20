@@ -396,7 +396,7 @@ func _toggle_cover_debug() -> void:
 		# Build markers for the first time
 		var covers := get_tree().get_nodes_in_group("cover_point")
 		for cp: Node3D in covers:
-			if not is_instance_valid(cp):
+			if not is_instance_valid(cp) or not cp.is_inside_tree():
 				continue
 
 			# Sphere marker — store cover point reference in metadata

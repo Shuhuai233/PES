@@ -60,7 +60,6 @@ var _aim_timer: float = 0.0             ## aim delay before shooting
 var _cover_timer: float = 0.0
 var _burst_remaining: int = 0
 var _burst_timer: float = 0.0
-var _peek_timer: float = 0.0
 var _melee_cooldown: float = 0.0
 var _advance_shoot_timer: float = 0.0
 var _no_cover_timer: float = 0.0
@@ -276,7 +275,7 @@ func _state_in_cover(delta: float) -> void:
 				_transition(State.SEEK_COVER); return
 
 # ═══════════════ PEEK_OUT (move to peek position, no aiming) ═══════════════
-func _state_peek_out(delta: float) -> void:
+func _state_peek_out(_delta: float) -> void:
 	# Move toward peek position (don't look at player yet)
 	var dist := _flat_dist_to(_peek_pos)
 	if dist < 0.15:
@@ -317,7 +316,7 @@ func _state_peek_shoot(delta: float) -> void:
 				_peek_shoot_count = 0; _release_cover(); _cover_point = null; _nav_target_set = false
 
 # ═══════════════ PEEK_RETURN (move back to cover, no aiming) ═══════════════
-func _state_peek_return(delta: float) -> void:
+func _state_peek_return(_delta: float) -> void:
 	if _cover_point == null or not is_instance_valid(_cover_point):
 		_transition(State.SEEK_COVER); return
 	var cover_pos := _cover_point.global_position
