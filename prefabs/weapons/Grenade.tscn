@@ -1,0 +1,25 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/grenade.gd" id="1"]
+
+[sub_resource type="SphereMesh" id="mesh"]
+radius = 0.1
+height = 0.2
+
+[sub_resource type="StandardMaterial3D" id="mat"]
+albedo_color = Color(0.25, 0.35, 0.12, 1)
+emission_enabled = true
+emission = Color(0.4, 0.3, 0.05)
+emission_energy_multiplier = 1.5
+
+[node name="Grenade" type="Node3D"]
+script = ExtResource("1")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("mesh")
+surface_material_override/0 = SubResource("mat")
+
+[node name="FuseLight" type="OmniLight3D" parent="."]
+light_color = Color(1, 0.6, 0.1, 1)
+light_energy = 2.0
+omni_range = 2.0

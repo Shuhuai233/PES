@@ -17,6 +17,7 @@ extends Node3D
 # ─────────────────────────────────────────────
 @export var min_cover_height: float = 0.6      ## minimum height to qualify as cover (meters)
 @export var full_cover_height: float = 1.4     ## height for full-body cover
+@export var min_cover_width: float = 0.8       ## minimum edge width to generate cover (enemy shoulder width)
 @export var sample_spacing: float = 1.5        ## distance between sample points along edges
 @export var cover_offset: float = 0.45         ## how far outside the obstacle to place the point
 @export var min_obstacle_height: float = 0.5   ## ignore obstacles shorter than this
@@ -197,8 +198,10 @@ func _generate_cover_for_obstacle(data: Dictionary) -> int:
 		var dist: float = d["dist"]
 		var edge_dir: Vector3 = d["edge_dir"]
 
-		# How many sample points along this edge
+		# Skip edges narrower than minimum cover width
 		var edge_length: float = edge_half * 2.0
+		if edge_length < min_cover_width:
+			continue
 		var num_samples: int = max(1, int(edge_length / sample_spacing))
 
 		for i in num_samples:
@@ -219,12 +222,12 @@ func _generate_cover_for_obstacle(data: Dictionary) -> int:
 			if height >= full_cover_height:
 				cover_type = "full"
 
-			_place_cover_point(cover_pos, -normal, cover_type, count)
+			_place_cover_point(cover_pos, -normal, cover_type, edge_length, count)
 			count += 1
 
 	return count
 
-func _place_cover_point(pos: Vector3, facing: Vector3, cover_type: String, index: int) -> void:
+func _place_cover_point(pos: Vector3, facing: Vector3, cover_type: String, width: float, index: int) -> void:
 	var marker := Node3D.new()
 	marker.name = "CP_%04d" % (get_child_count() + index)
 	marker.position = pos
@@ -236,6 +239,7 @@ func _place_cover_point(pos: Vector3, facing: Vector3, cover_type: String, index
 	# Store metadata for AI to read
 	marker.set_meta("cover_type", cover_type)  # "half" or "full"
 	marker.set_meta("facing", facing)           # direction toward the obstacle
+	marker.set_meta("cover_width", width)       # width of the cover edge in meters
 	add_child(marker)
 	# Set owner so it saves with the scene
 	var scene_root := get_tree().edited_scene_root

@@ -447,31 +447,11 @@ func _enemy_muzzle_flash() -> void:
 func _throw_grenade() -> void:
 	if _player == null or not is_instance_valid(_player): return
 	_grenade_cooldown = grenade_cooldown_time
-	var target := _player.global_position
-	var grenade := MeshInstance3D.new()
-	var sphere := SphereMesh.new(); sphere.radius = 0.1; sphere.height = 0.2; grenade.mesh = sphere
-	var mat := StandardMaterial3D.new(); mat.albedo_color = Color(0.2, 0.3, 0.1)
-	grenade.set_surface_override_material(0, mat)
+	var grenade_scene: PackedScene = load("res://prefabs/weapons/Grenade.tscn")
+	var grenade: Node3D = grenade_scene.instantiate()
 	get_tree().current_scene.add_child(grenade)
 	grenade.global_position = global_position + Vector3(0, 1.2, 0)
-	var mid := (grenade.global_position + target) * 0.5 + Vector3(0, 3.0, 0)
-	var tween := grenade.create_tween()
-	tween.tween_property(grenade, "global_position", mid, 0.4).set_ease(Tween.EASE_OUT)
-	tween.tween_property(grenade, "global_position", target, 0.4).set_ease(Tween.EASE_IN)
-	tween.tween_callback(_grenade_explode.bind(target, grenade))
-
-func _grenade_explode(pos: Vector3, grenade_node: Node) -> void:
-	if is_instance_valid(grenade_node): grenade_node.queue_free()
-	var flash := OmniLight3D.new()
-	flash.light_color = Color(1.0, 0.5, 0.1); flash.light_energy = 12.0
-	flash.omni_range = grenade_radius * 2.0; flash.global_position = pos
-	get_tree().current_scene.add_child(flash)
-	var tw := flash.create_tween()
-	tw.tween_property(flash, "light_energy", 0.0, 0.4); tw.tween_callback(flash.queue_free)
-	if _player and is_instance_valid(_player):
-		var dist := _player.global_position.distance_to(pos)
-		if dist < grenade_radius:
-			damaged_player.emit(int(grenade_damage * (1.0 - dist / grenade_radius)), global_position)
+	grenade.launch(_player.global_position, grenade_damage, grenade_radius)
 
 func _try_melee() -> void:
 	if _melee_cooldown > 0.0: return
@@ -552,6 +532,13 @@ func _evaluate_single_cover(cp: Node3D) -> float:
 		var ct: String = cp.get_meta("cover_type")
 		if ct == "full": score += 6.0
 		elif ct == "half": score += 2.0
+
+	# 1d. Cover width bonus — wider = better concealment
+	if cp.has_meta("cover_width"):
+		var cw: float = cp.get_meta("cover_width")
+		if cw >= 2.0: score += 8.0     # wide cover, excellent
+		elif cw >= 1.2: score += 4.0   # decent width
+		elif cw < 0.8: score -= 10.0   # too narrow, enemy exposed
 
 	# 2. Shoot feasibility from peek
 	var to_player := (player_pos - cp_pos); to_player.y = 0.0; to_player = to_player.normalized()

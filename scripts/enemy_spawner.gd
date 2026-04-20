@@ -58,6 +58,11 @@ signal enemy_killed(enemy: Node, total_kills: int)
 func activate() -> void:
 	active = true
 	spawn_timer = first_spawn_delay
+	add_to_group("enemy_spawner")
+	# Also activate all SpawnClosets in the scene
+	for closet in get_tree().get_nodes_in_group("spawn_closet"):
+		if closet.has_method("activate"):
+			closet.activate()
 
 func deactivate() -> void:
 	active = false
@@ -108,6 +113,11 @@ func _on_enemy_died(enemy: Node) -> void:
 # Procedural enemy construction
 # ─────────────────────────────────────────────
 func _build_enemy() -> CharacterBody3D:
+	var variant_idx := randi() % COLOR_VARIANTS.size()
+	return _build_enemy_archetype(variant_idx)
+
+## Build enemy with specific archetype (0=Rusher, 1=Standard, 2=Heavy)
+func _build_enemy_archetype(archetype_idx: int) -> CharacterBody3D:
 	var root := CharacterBody3D.new()
 	root.set_script(ENEMY_SCRIPT)
 	root.add_to_group("enemies")
@@ -134,9 +144,8 @@ func _build_enemy() -> CharacterBody3D:
 	root.add_child(head_col)
 
 	# Color variant + stats
-	var variant_idx := randi() % COLOR_VARIANTS.size()
-	var c: Color = COLOR_VARIANTS[variant_idx]
-	var stats: Dictionary = VARIANT_STATS[variant_idx]
+	var c: Color = COLOR_VARIANTS[archetype_idx]
+	var stats: Dictionary = VARIANT_STATS[archetype_idx]
 
 	# Apply variant stats to the enemy script properties
 	root.set("speed", stats["speed"])

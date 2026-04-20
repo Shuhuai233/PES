@@ -21,7 +21,7 @@ enum TutorialStep {
 	COMPLETE        # 12 完成
 }
 
-var current_step: TutorialStep = TutorialStep.WELCOME
+var current_step: TutorialStep = TutorialStep.COMPLETE  ## Tutorial disabled
 
 const STEP_TITLE: Array[String] = [
 	"欢迎来到 PES",
